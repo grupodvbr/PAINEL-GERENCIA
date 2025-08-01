@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Painel de Gestão - CB Systems</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      background: #f4f6f9;
+    }
+    header {
+      background-color: #2c3e50;
+      color: white;
+      text-align: center;
+      padding: 20px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .value {
+      font-size: 24px;
+      color: #2c3e50;
+    }
+    .filter {
+      margin: 10px 20px;
+    }
+    select, button {
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <header>CB Systems | Painel do Gestor</header>
+
+  <div class="filter">
+    <label for="empresa">Empresa:</label>
+    <select id="empresa">
+      <option>MERCATTO DELICIA</option>
+      <option>DELICIA GOURMET</option>
+      <option>VILLA GOURMET</option>
+      <option>M. KIDS</option>
+      <option>PADARIA DELICIA</option>
+    </select>
+    <label for="usuario">Usuário:</label>
+    <select id="usuario">
+      <option>Selecionar...</option>
+    </select>
+    <button onclick="filtrarPainel()">Filtrar</button>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div class="title">Limite de Compras</div>
+      <div class="value" id="limiteCompras">--</div>
+    </div>
+    <div class="card">
+      <div class="title">Compras Realizadas</div>
+      <div class="value" id="comprasRealizadas">--</div>
+    </div>
+    <div class="card">
+      <div class="title">Satisfação dos Clientes</div>
+      <canvas id="graficoSatisfacao"></canvas>
+    </div>
+    <div class="card">
+      <div class="title">Avisos Importantes</div>
+      <ul id="avisos"></ul>
+    </div>
+  </div>
+
+  <script>
+    const usuariosPorEmpresa = {
+      "MERCATTO DELICIA": ["Lucas", "Maria"],
+      "DELICIA GOURMET": ["João", "Patrícia"],
+      "VILLA GOURMET": ["Carlos", "Fernanda"],
+      "M. KIDS": ["Bruno"],
+      "PADARIA DELICIA": ["Ana", "Roberto"]
+    };
+
+    const urlMetas = 'https://script.google.com/macros/s/AKfycbzyiL6yNCj_FYWiQ2PS88mthToCvWM1wJ0q7CQy8asyg-59L8YezKzFY6d-lgQU0ni3/exec';
+    const urlFaturamento = 'https://script.google.com/macros/s/AKfycbz9GQLrIB4oiX0jBQ7yaDO_IiMz3ER7lQT094sp5y2VUGgQWBaz3G1fa7s4ZbiWli_O/exec';
+
+    document.getElementById("empresa").addEventListener("change", () => {
+      const empresa = document.getElementById("empresa").value;
+      const usuarios = usuariosPorEmpresa[empresa] || [];
+      const selectUsuario = document.getElementById("usuario");
+      selectUsuario.innerHTML = '<option>Selecionar...</option>' + usuarios.map(u => `<option>${u}</option>`).join('');
+    });
+
+    async function filtrarPainel() {
+      const empresa = document.getElementById("empresa").value;
+      const usuario = document.getElementById("usuario").value;
+
+      const metas = await fetch(urlMetas).then(res => res.json());
+      const faturamento = await fetch(urlFaturamento).then(res => res.json());
+
+      const meta = metas.find(item => item.Empresa === empresa && item.Usuário === usuario);
+      const fat = faturamento.find(item => item.Empresa === empresa && item.Usuário === usuario);
+
+      document.getElementById("limiteCompras").textContent = meta ? formatar(meta.LimiteCompras) : '--';
+      document.getElementById("comprasRealizadas").textContent = fat ? formatar(fat.ComprasRealizadas) : '--';
+
+      atualizarGraficoSatisfacao(meta);
+      atualizarAvisos(meta);
+    }
+
+    function atualizarGraficoSatisfacao(meta) {
+      const ctx = document.getElementById('graficoSatisfacao').getContext('2d');
+      const data = meta ? [meta.Excelente, meta.Bom, meta.Regular, meta.Ruim] : [0,0,0,0];
+      new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: ['Excelente', 'Bom', 'Regular', 'Ruim'],
+          datasets: [{
+            data,
+            backgroundColor: ['#27ae60', '#2980b9', '#f1c40f', '#e74c3c']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+    }
+
+    function atualizarAvisos(meta) {
+      const ul = document.getElementById("avisos");
+      ul.innerHTML = '';
+      if (meta && meta.Avisos) {
+        meta.Avisos.split(';').forEach(aviso => {
+          const li = document.createElement('li');
+          li.textContent = aviso;
+          ul.appendChild(li);
+        });
+      }
+    }
+
+    function formatar(valor) {
+      return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+  </script>
+</body>
+</html>
