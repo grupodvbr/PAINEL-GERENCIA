@@ -88,76 +88,102 @@
     </div>
   </div>
 
-  <script>
-    const usuariosPorEmpresa = {
-      "MERCATTO DELICIA": ["Lucas", "Maria"],
-      "DELICIA GOURMET": ["João", "Patrícia"],
-      "VILLA GOURMET": ["Carlos", "Fernanda"],
-      "M. KIDS": ["Bruno"],
-      "PADARIA DELICIA": ["Ana", "Roberto"]
-    };
+<script>
+  const usuariosPorEmpresa = {
+    "MERCATTO DELICIA": ["Lucas", "Maria"],
+    "DELICIA GOURMET": ["João", "Patrícia"],
+    "VILLA GOURMET": ["Carlos", "Fernanda"],
+    "M. KIDS": ["Bruno"],
+    "PADARIA DELICIA": ["Ana", "Roberto"]
+  };
 
-    const urlMetas = 'https://script.google.com/macros/s/AKfycbzyiL6yNCj_FYWiQ2PS88mthToCvWM1wJ0q7CQy8asyg-59L8YezKzFY6d-lgQU0ni3/exec';
-    const urlFaturamento = 'https://script.google.com/macros/s/AKfycbz9GQLrIB4oiX0jBQ7yaDO_IiMz3ER7lQT094sp5y2VUGgQWBaz3G1fa7s4ZbiWli_O/exec';
+  const senhaPorUsuario = {
+    "Lucas": "1234",
+    "Maria": "5678",
+    "João": "abcd",
+    "Patrícia": "efgh",
+    "Carlos": "senha1",
+    "Fernanda": "senha2",
+    "Bruno": "kids123",
+    "Ana": "pao321",
+    "Roberto": "padaria"
+  };
 
-    document.getElementById("empresa").addEventListener("change", () => {
-      const empresa = document.getElementById("empresa").value;
-      const usuarios = usuariosPorEmpresa[empresa] || [];
-      const selectUsuario = document.getElementById("usuario");
-      selectUsuario.innerHTML = '<option>Selecionar...</option>' + usuarios.map(u => `<option>${u}</option>`).join('');
-    });
+  const urlMetas = 'https://script.google.com/macros/s/AKfycbzyiL6yNCj_FYWiQ2PS88mthToCvWM1wJ0q7CQy8asyg-59L8YezKzFY6d-lgQU0ni3/exec';
+  const urlFaturamento = 'https://script.google.com/macros/s/AKfycbz9GQLrIB4oiX0jBQ7yaDO_IiMz3ER7lQT094sp5y2VUGgQWBaz3G1fa7s4ZbiWli_O/exec';
 
-    async function filtrarPainel() {
-      const empresa = document.getElementById("empresa").value;
-      const usuario = document.getElementById("usuario").value;
+  document.getElementById("empresa").addEventListener("change", () => {
+    const empresa = document.getElementById("empresa").value;
+    const usuarios = usuariosPorEmpresa[empresa] || [];
+    const selectUsuario = document.getElementById("usuario");
+    selectUsuario.innerHTML = '<option>Selecionar...</option>' + usuarios.map(u => `<option>${u}</option>`).join('');
+  });
 
-      const metas = await fetch(urlMetas).then(res => res.json());
-      const faturamento = await fetch(urlFaturamento).then(res => res.json());
+  async function filtrarPainel() {
+    const empresa = document.getElementById("empresa").value;
+    const usuario = document.getElementById("usuario").value;
 
-      const meta = metas.find(item => item.Empresa === empresa && item.Usuário === usuario);
-      const fat = faturamento.find(item => item.Empresa === empresa && item.Usuário === usuario);
-
-      document.getElementById("limiteCompras").textContent = meta ? formatar(meta.LimiteCompras) : '--';
-      document.getElementById("comprasRealizadas").textContent = fat ? formatar(fat.ComprasRealizadas) : '--';
-
-      atualizarGraficoSatisfacao(meta);
-      atualizarAvisos(meta);
+    if (usuario === "Selecionar...") {
+      alert("Selecione um usuário.");
+      return;
     }
 
-    function atualizarGraficoSatisfacao(meta) {
-      const ctx = document.getElementById('graficoSatisfacao').getContext('2d');
-      const data = meta ? [meta.Excelente, meta.Bom, meta.Regular, meta.Ruim] : [0,0,0,0];
-      new Chart(ctx, {
-        type: 'pie',
-        data: {
-          labels: ['Excelente', 'Bom', 'Regular', 'Ruim'],
-          datasets: [{
-            data,
-            backgroundColor: ['#27ae60', '#2980b9', '#f1c40f', '#e74c3c']
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { position: 'bottom' } }
-        }
+    const senhaDigitada = prompt(`Digite a senha para o usuário ${usuario}:`);
+    const senhaCorreta = senhaPorUsuario[usuario];
+
+    if (senhaDigitada !== senhaCorreta) {
+      alert("Senha incorreta. Acesso negado.");
+      return;
+    }
+
+    const metas = await fetch(urlMetas).then(res => res.json());
+    const faturamento = await fetch(urlFaturamento).then(res => res.json());
+
+    const meta = metas.find(item => item.Empresa === empresa && item.Usuário === usuario);
+    const fat = faturamento.find(item => item.Empresa === empresa && item.Usuário === usuario);
+
+    document.getElementById("limiteCompras").textContent = meta ? formatar(meta.LimiteCompras) : '--';
+    document.getElementById("comprasRealizadas").textContent = fat ? formatar(fat.ComprasRealizadas) : '--';
+
+    atualizarGraficoSatisfacao(meta);
+    atualizarAvisos(meta);
+  }
+
+  function atualizarGraficoSatisfacao(meta) {
+    const ctx = document.getElementById('graficoSatisfacao').getContext('2d');
+    const data = meta ? [meta.Excelente, meta.Bom, meta.Regular, meta.Ruim] : [0,0,0,0];
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['Excelente', 'Bom', 'Regular', 'Ruim'],
+        datasets: [{
+          data,
+          backgroundColor: ['#27ae60', '#2980b9', '#f1c40f', '#e74c3c']
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  function atualizarAvisos(meta) {
+    const ul = document.getElementById("avisos");
+    ul.innerHTML = '';
+    if (meta && meta.Avisos) {
+      meta.Avisos.split(';').forEach(aviso => {
+        const li = document.createElement('li');
+        li.textContent = aviso;
+        ul.appendChild(li);
       });
     }
+  }
 
-    function atualizarAvisos(meta) {
-      const ul = document.getElementById("avisos");
-      ul.innerHTML = '';
-      if (meta && meta.Avisos) {
-        meta.Avisos.split(';').forEach(aviso => {
-          const li = document.createElement('li');
-          li.textContent = aviso;
-          ul.appendChild(li);
-        });
-      }
-    }
+  function formatar(valor) {
+    return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+</script>
 
-    function formatar(valor) {
-      return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    }
-  </script>
 </body>
 </html>
