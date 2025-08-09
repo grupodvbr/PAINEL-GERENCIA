@@ -17,7 +17,8 @@
   select,input[type="month"]{width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;background:#fff}
   .section{margin-top:14px}
   .company>.title{font-weight:800;margin:10px 2px 12px}
-  /* 1 card por linha no mobile; 2 por linha >= 680px */
+
+  /* 1 card/linha no mobile; 2 em telas >=680px */
   .kpis{display:grid;grid-template-columns:1fr;gap:10px}
   @media(min-width:680px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .kpi{background:var(--card);border-radius:14px;padding:10px;box-shadow:var(--shadow);position:relative}
@@ -29,9 +30,8 @@
   .kpi.warn{background:var(--amberbg);color:var(--amber)}
   .progress{height:6px;background:#e5e7eb;border-radius:999px;margin-top:8px;overflow:hidden}
   .progress>span{display:block;height:100%;background:var(--primary);width:0;border-radius:999px;transition:width .2s}
-  /* botão ver planos (canto superior direito do card) */
-  .btn-link{position:absolute;top:6px;right:8px;font-size:11px;border:1px solid #bae6fd;background:#e0f2fe;color:#0369a1;
-            padding:4px 8px;border-radius:999px;cursor:pointer}
+
+  .btn-link{position:absolute;top:6px;right:8px;font-size:11px;border:1px solid #bae6fd;background:#e0f2fe;color:#0369a1;padding:4px 8px;border-radius:999px;cursor:pointer}
   .btn-link:hover{filter:brightness(.97)}
 
   .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
@@ -40,7 +40,6 @@
   .list{margin:0;padding-left:18px}
   .list li+li{margin-top:6px}
 
-  /* Toolbar do gráfico */
   .chart-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
   .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid #e5e7eb;border-radius:999px;padding:6px 10px;background:#fff}
   .chip select,.chip input{border:none;background:transparent;outline:none;font-size:13px}
@@ -118,7 +117,6 @@ function progressCalc(limit, spent, perStr){
   let elapsed=0, remain=0;
   if(cmp<0){elapsed=dim;remain=0;} else if(cmp>0){elapsed=0;remain=dim;} else {elapsed=Math.min(today.getDate(),dim);remain=Math.max(dim-elapsed,0);}
   const pct=limit>0?spent/limit*100:0, available=limit-spent;
-  // status só para fornecedores (trava é neutra)
   const daily=elapsed>0?spent/elapsed:0, forecast=spent+daily*remain, forecastPct=limit>0?forecast/limit*100:0;
   let status='neutral'; if(cmp<0) status=spent>limit?'bad':'good'; else if(cmp===0) status=forecast>limit?'bad':(pct>=80?'warn':'good'); else status=pct>=80?'warn':'neutral';
   return {pct,available,forecast,forecastPct,status};
@@ -135,34 +133,38 @@ function fonte9Total(rec){
   return 0;
 }
 
-/* ======== leitura de PLANOS conforme sua planilha =========
-   - nomes nas colunas B,G,L,Q,V  (índices 1,6,11,16,21)
-   - valores na coluna seguinte   (C,H,M,R,W)                 */
-const PLAN_NAME_COLS=[1,6,11,16,21]; // zero-based
-function extractPlanosFromGrid(grid){
-  if(!Array.isArray(grid)||!Array.isArray(grid[0])) return null;
-  const map=new Map();
-  grid.forEach(row=>{
-    PLAN_NAME_COLS.forEach(idx=>{
-      const nome=row[idx]; const val=row[idx+1];
-      if(nome!=null && nome!=='' && val!=null && val!==''){
-        const v=Number(String(val).toString().replace(/[^\d\-.,]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
-        if(!isNaN(v)){ map.set(String(nome), (map.get(String(nome))||0)+v); }
-      }
-    });
-  });
-  return Array.from(map, ([nome,valor])=>({nome,valor}));
-}
+/* ------- Planos (PRIORIDADE: planosFonte9 da API) ------- */
 function extractPlanos(rec){
-  // 1) tenta grid/tabela no formato da planilha
-  let planos = extractPlanosFromGrid(rec?.grid)||extractPlanosFromGrid(rec?.tabela);
-  if(planos && planos.length) return planos;
-  // 2) fallback: fonte9Detalhe
-  if(Array.isArray(rec?.fonte9Detalhe)) return rec.fonte9Detalhe.map(i=>({nome:i.nome??i.planocontas??i.categoria??'—',valor:Number(i.valor??i.total??0)}));
-  // 3) fallback: categorias (subitens com font 9)
-  if(Array.isArray(rec?.categorias)){
-    const out=[]; rec.categorias.forEach(c=>(c.subs||[]).forEach(s=>{const f=Number(s.font); if(f===9||s.isSub===true||s.font==null) out.push({nome:s.nome??'—',valor:Number(s.valor||0)})}));
-    return out;
+  if (Array.isArray(rec?.planosFonte9) && rec.planosFonte9.length) {
+    return rec.planosFonte9.map(p=>({nome:String(p.nome??'—'),valor:Math.abs(Number(p.valor??0))}));
+  }
+  // fallbacks (se precisar)
+  const PLAN_NAME_COLS=[1,6,11,16,21]; // B,G,L,Q,V (zero-based)
+  const planosFromGrid = (grid=>{
+    if(!Array.isArray(grid)||!Array.isArray(grid[0])) return [];
+    const map=new Map();
+    grid.forEach(row=>{
+      PLAN_NAME_COLS.forEach(idx=>{
+        const nome=row[idx]; const val=row[idx+1];
+        if(nome!=null && nome!=='' && val!=null && val!==''){
+          const v=Number(String(val).toString().replace(/[^\d\-.,]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
+          if(!isNaN(v)) map.set(String(nome),(map.get(String(nome))||0)+Math.abs(v));
+        }
+      });
+    });
+    return Array.from(map, ([nome,valor])=>({nome,valor}));
+  })(rec?.grid || rec?.tabela);
+  if (planosFromGrid.length) return planosFromGrid;
+
+  if (Array.isArray(rec?.fonte9Detalhe) && rec.fonte9Detalhe.length) {
+    return rec.fonte9Detalhe.map(i=>({nome:i.nome??i.planocontas??i.categoria??'—',valor:Math.abs(Number(i.valor??i.total??0))}));
+  }
+  if (Array.isArray(rec?.categorias)){
+    const out=[]; rec.categorias.forEach(c=>(c.subs||[]).forEach(s=>{const f=Number(s.font); if(f===9||s.isSub===true||s.font==null) out.push({nome:s.nome??'—',valor:Math.abs(Number(s.valor||0))})}));
+    if(out.length) return out;
+  }
+  if (Array.isArray(rec?.fornecedoresDetalhe) && rec.fornecedoresDetalhe.length) {
+    return rec.fornecedoresDetalhe.map(i=>({nome:i.nome??'—',valor:Math.abs(Number(i.valor||0))}));
   }
   return [];
 }
@@ -189,7 +191,9 @@ let ChartLib=null;
 selEmpresa.addEventListener('change', run);
 inpPeriodo.addEventListener('change', run);
 window.addEventListener('DOMContentLoaded', ()=>{
-  const hoje=new Date(); inpPeriodo.value=hoje.toISOString().slice(0,7); run();
+  const hoje=new Date();
+  inpPeriodo.value=hoje.toISOString().slice(0,7); // mês atual no filtro superior
+  run();
 });
 
 /* Modal */
@@ -221,10 +225,9 @@ async function run(){
       const fornecLim=aliases(rec,['travaCompras','trava_compras','fornecedoresTotal','D2'],0);
       const fonte9=fonte9Total(rec);
       const fornComp=aliases(rec,['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'],0);
-      const gTotal=progressCalc(travaTotal, fonte9, periodo); // só p/ % e disponível
+      const gTotal=progressCalc(travaTotal, fonte9, periodo);
       const gForn =progressCalc(fornecLim,  fornComp, periodo);
-
-      const planos=extractPlanos(rec); // conforme B,G,L,Q,V (ou fallback)
+      const planos=extractPlanos(rec);
 
       const sec=document.createElement('section'); sec.className='company';
       sec.innerHTML = `
@@ -254,18 +257,14 @@ async function run(){
         </div>
       `;
       container.appendChild(sec);
-
-      // botão "Ver planos"
-      sec.querySelector('[data-ver-planos]').addEventListener('click',()=>{
-        openModal(`Detalhamento Fornecedores — ${emp}`, planos);
-      });
+      sec.querySelector('[data-ver-planos]').addEventListener('click',()=>openModal(`Detalhamento Fornecedores — ${emp}`, planos));
 
       // gráfico apenas quando 1 empresa
       if(empSel!=='TODAS AS EMPRESAS'){
         const chartWrap=document.createElement('div'); chartWrap.className='grid';
         chartWrap.innerHTML=renderChartBlock(emp);
         container.appendChild(chartWrap);
-        await mountChart(emp, chartWrap); // usa planos B,G,L,Q,V para o filtro e séries
+        await mountChart(emp, chartWrap);
       }
     }catch(err){
       container.insertAdjacentHTML('beforeend', `<section class="company"><div class="title">${emp}</div><div class="kpi bad"><div class="label">Erro</div><div class="value" style="font-size:16px">${String(err.message||err)}</div></div></section>`);
@@ -273,10 +272,11 @@ async function run(){
   }
 }
 
-/* Bloco de gráfico */
+/* Bloco do gráfico — default: janeiro do ano atual até mês atual */
 function renderChartBlock(emp){
-  const now=new Date(); const y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0');
-  const to=`${y}-${m}`, fromDate=new Date(y,now.getMonth()-5,1), from=`${fromDate.getFullYear()}-${String(fromDate.getMonth()+1).padStart(2,'0')}`;
+  const now=new Date(); const year=now.getFullYear();
+  const from=`${year}-01`;
+  const to=`${year}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const planId=`plan-${Math.random().toString(36).slice(2,7)}`, fromId=`from-${Math.random().toString(36).slice(2,7)}`, toId=`to-${Math.random().toString(36).slice(2,7)}`, cvs=`cv-${Math.random().toString(36).slice(2,7)}`;
   return `
     <div class="card">
@@ -297,24 +297,26 @@ function renderChartBlock(emp){
     </div>`;
 }
 
-/* Utils de série temporal */
+/* Range de meses */
 function monthRange(from,to){let a=parseYYYYMM(from),b=parseYYYYMM(to);if(!a||!b)return[];if(a>b){const t=a;a=b;b=t;}const out=[],c=new Date(a);while(c<=b){out.push(`${c.getFullYear()}-${String(c.getMonth()+1).padStart(2,'0')}`);c.setMonth(c.getMonth()+1);}return out}
 
-/* Monta séries respeitando os planos B,G,L,Q,V */
+/* Séries (usa o valor do ÚLTIMO registro do mês — o que a API devolve para o mês) */
 async function buildSeries(emp, from, to){
   const months=monthRange(from,to), labels=[...months];
   const total=new Array(months.length).fill(0);
-  const planMap={}; // nome-> array
-  const plansSet=new Set();
+  const planMap={}; const plansSet=new Set();
 
   for(let i=0;i<months.length;i++){
-    const per=months[i]; const rec=await getEmpresaPeriodo(emp, per);
+    const per=months[i];
+    const rec=await getEmpresaPeriodo(emp, per);
     total[i]=fonte9Total(rec);
-    const planos=extractPlanos(rec);
+
+    const planos=extractPlanos(rec); // planos desse mês (valor do último dia registrado)
     planos.forEach(p=>{
       plansSet.add(p.nome);
       if(!planMap[p.nome]) planMap[p.nome]=new Array(months.length).fill(0);
-      planMap[p.nome][i]+=Math.abs(Number(p.valor||0));
+      // usamos o valor do mês (não somar!), então atribuimos:
+      planMap[p.nome][i]=Math.abs(Number(p.valor||0));
     });
   }
   return {labels,total,planMap,plans:[...plansSet].sort()};
@@ -351,7 +353,7 @@ async function mountChart(emp, holder){
       options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true}}}
     });
 
-    // Top 10 do mês mais recente da janela
+    // Top 10 do mês mais recente
     const last=data.labels.length-1;
     if(chosen){
       topList.innerHTML=`<li><b>${chosen}</b> — ${moeda((data.planMap[chosen]||[])[last]||0)}</li>`;
