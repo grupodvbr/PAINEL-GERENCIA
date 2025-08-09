@@ -2,15 +2,14 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
-<title>CB Systems • Painel do Gestor</title>
+<title>CB Systems • Painel de Travas</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root{--bg:#f6f8fb;--ink:#0f172a;--muted:#64748b;--card:#fff;--primary:#0ea5e9;--shadow:0 1px 8px rgba(0,0,0,.06)}
   *{box-sizing:border-box}
   body{background:var(--bg);color:var(--ink);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;margin:0}
   header{position:sticky;top:0;z-index:10;background:#0b1220;color:#fff;padding:14px 18px;font-weight:700;box-shadow:0 2px 12px rgba(0,0,0,.25)}
-  .wrap{padding:18px;max-width:1400px;margin:0 auto}
+  .wrap{padding:18px;max-width:1200px;margin:0 auto}
   .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;background:var(--card);border-radius:14px;padding:12px;box-shadow:var(--shadow)}
   select,input[type="month"]{padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px}
   .section{margin-top:16px}
@@ -21,26 +20,16 @@
   .kpi .label{color:var(--muted);font-size:12px;margin-bottom:6px}
   .kpi .value{font-size:24px;font-weight:900}
   .kpi .hint{color:var(--muted);font-size:12px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:12px}
-  .card{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
-  .card .title{font-weight:700;margin-bottom:8px}
   /* Modal */
   #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:1000}
   #modal .box{background:#fff;padding:18px;border-radius:12px;max-width:560px;width:92%;max-height:80%;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   #modal .box h3{margin:0 0 8px}
   #modal .box ul{margin:10px 0 0;padding-left:18px}
   #modal .box button{margin-top:12px;background:#0ea5e9;color:#fff;border:none;border-radius:10px;padding:8px 12px;cursor:pointer}
-  /* Debug */
-  #debug{margin:18px auto;max-width:1400px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px;box-shadow:var(--shadow)}
-  #debug h4{margin:0 0 8px}
-  #debug .row{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:12px;border-top:1px dashed #e5e7eb;padding:6px 0}
-  .err{color:#991b1b}
-  .ok{color:#065f46}
-  a.test{font-size:12px;margin-left:6px}
 </style>
 </head>
 <body>
-<header>CB Systems • Painel do Gestor</header>
+<header>CB Systems • Painel de Travas</header>
 
 <div class="wrap">
   <div class="filters">
@@ -70,209 +59,115 @@
   </div>
 </div>
 
-<!-- Debug -->
-<div id="debug">
-  <h4>🛠 Painel de Diagnóstico</h4>
-  <div id="dbg-body"></div>
-</div>
-
 <script>
-/* ========= ENDPOINTS ========= */
+/* ======= ENDPOINT (TRAVAS) ======= */
 const API_BASE = 'https://script.google.com/macros/s/AKfycbxUf9oERSm53CpZQKkpp3mFXR3aLWc4tzSVW8DPHqsGvVt-keB_KtzAJiIgLMm9GYnB/exec';
-const URL_METAS  = 'https://script.google.com/macros/s/AKfycbziCPWWJxxfrnSeT3RHsNbw21z9MfnnB8JpV7ZQcZnvUQQ7dL3lVJdpUG7epACVjFaO/exec';
-const URL_CANCEL = 'https://script.google.com/macros/s/AKfycbzM1mmixFkFE5tbC-0Evc6GVyZEJkh88HCikNK08FujRwCrgUA1e_E29nMHip81kRPoSg/exec';
-const URL_SAT    = 'https://script.google.com/macros/s/AKfycbyK3A5CDn_EgA3pbRVToh87_qKWvbIry886OkR1AdkJi7RyvSgcwY0BmRqhbKQnEKwgrA/exec';
 
-/* ========= HELPERS ========= */
+/* ======= HELPERS ======= */
 const EMPRESAS=['MERCATTO DELICIA','DELICIA GOURMET','VILLA GOURMET','M. KIDS','PADARIA DELICIA'];
 const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
 const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const aliases=(obj,keys,def=0)=>{for(const k of keys){if(obj&&obj[k]!=null&&obj[k]!=='' && !isNaN(Number(obj[k]))) return Number(obj[k]);}return def;};
 const idSafe=(p,k)=>`${p}-${norm(k).replace(/[^A-Z0-9]+/g,'-')}-${Math.random().toString(36).slice(2,6)}`;
 
-/* ========= Debug ========= */
-const dbg = (type, msg, extra={})=>{
-  console[type==='error'?'error':'log']('[DBG]', msg, extra);
-  const row=document.createElement('div'); row.className='row';
-  const cls = type==='error'?'err':'ok';
-  let link='';
-  if(extra?.testUrl){ link=`<a class="test" target="_blank" href="${extra.testUrl}">abrir</a>`; }
-  row.innerHTML=`<span class="${cls}">[${type}]</span> ${msg} ${link}`;
-  document.getElementById('dbg-body').appendChild(row);
-};
-
-/* ========= FONTE 9: pega pronto ou calcula ========= */
+/* ======= FONTE 9 TOTAL: pega pronto ou calcula (coluna C / listas) ======= */
 function getFonte9Total(rec){
   const ready = ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'];
   for(const k of ready){ if(rec && rec[k]!=null && rec[k]!=='' && !isNaN(Number(rec[k]))) return Number(rec[k]); }
+
   if (Array.isArray(rec?.fonte9Detalhe)) {
-    const t = rec.fonte9Detalhe.reduce((acc, it)=> acc + Math.abs(Number(it.valor||it.total||0)), 0);
-    if (t){ dbg('log','Fonte9 calculado via fonte9Detalhe'); return t; }
+    const t = rec.fonte9Detalhe.reduce((a,i)=>a+Math.abs(Number(i.valor||i.total||0)),0);
+    if (t) return t;
   }
   if (Array.isArray(rec?.categorias)) {
-    let total = 0;
+    let total=0;
     rec.categorias.forEach(cat=>{
-      const subs = Array.isArray(cat?.subs) ? cat.subs : [];
-      subs.forEach(s=>{
-        const f = Number(s.font);
-        if (f===9 || s.isSub===true || s.font==null) total += Math.abs(Number(s.valor||0));
+      (cat.subs||[]).forEach(s=>{
+        const f=Number(s.font);
+        if (f===9 || s.isSub===true || s.font==null) total+=Math.abs(Number(s.valor||0));
       });
     });
-    if (total){ dbg('log','Fonte9 calculado via categorias.subs/font==9'); return total; }
+    if (total) return total;
   }
-  const lists = [rec?.todos, rec?.itens, rec?.rows, rec?.linhas];
+  const lists=[rec?.todos,rec?.itens,rec?.rows,rec?.linhas];
   for(const L of lists){
-    if (Array.isArray(L)){
-      let total=0, any=false;
+    if(Array.isArray(L)){
+      let total=0,any=false;
       L.forEach(r=>{
-        const f = Number(r?.font);
-        const v = Number(r?.valor ?? r?.total ?? 0);
-        if (isNaN(f) || f===9){ total += Math.abs(v); any=true; }
+        const f=Number(r?.font);
+        const v=Number(r?.valor ?? r?.total ?? 0);
+        if (isNaN(f) || f===9){ total+=Math.abs(v); any=true; }
       });
-      if (any){ dbg('log','Fonte9 calculado via lista genérica'); return total; }
+      if(any) return total;
     }
   }
   if (Array.isArray(rec?.grid) && Array.isArray(rec.grid[0])) {
-    let total=0, any=false;
-    for (const row of rec.grid){
-      const v = Number(row[2] ?? 0); if (isFinite(v)){ total += Math.abs(v); any=true; }
-    }
-    if (any){ dbg('log','Fonte9 calculado via grid (coluna C)'); return total; }
+    let total=0,any=false;
+    for(const row of rec.grid){ const v=Number(row[2]??0); if(isFinite(v)){ total+=Math.abs(v); any=true; } }
+    if(any) return total;
   }
   if (Array.isArray(rec?.tabela) && Array.isArray(rec.tabela[0])) {
-    let total=0, any=false;
-    for (const row of rec.tabela){
-      const v = Number(row[2] ?? 0); if (isFinite(v)){ total += Math.abs(v); any=true; }
-    }
-    if (any){ dbg('log','Fonte9 calculado via tabela (coluna C)'); return total; }
+    let total=0,any=false;
+    for(const row of rec.tabela){ const v=Number(row[2]??0); if(isFinite(v)){ total+=Math.abs(v); any=true; } }
+    if(any) return total;
   }
-  dbg('error','Não foi possível calcular Fonte9 com o payload que veio.');
   return 0;
 }
 
-/* ========= Parsers (METAS/CANCEL/SAT) ========= */
-function num(v){const s=String(v||'').replace(/[^0-9,.-]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.');const n=parseFloat(s);return isNaN(n)?0:n;}
-function parseMetasTexto(text){
-  try{
-    const linhas=text.split(/\r?\n/).map(l=>l.trim()), out=[]; let emp=null;
-    for(let i=0;i<linhas.length;i++){
-      const l=linhas[i];
-      if(/^[A-ZÁÃÂÉÊÍÓÔÕÚÇ\.\s\-]+$/.test(l) && !/ANÁLISE|ATUALIZADO/i.test(l)) emp=l.replace(/[*•]/g,'').trim();
-      const m=l.match(/Meta:\s*R\$\s*([0-9\._.,]+)/i);
-      if(m){const meta=num(m[1]);let real=0;for(let j=i+1;j<i+5&&j<linhas.length;j++){const r=linhas[j].match(/Realizado:\s*R\$\s*([0-9\._.,]+)/i);if(r){real=num(r[1]);break;}} if(emp) out.push({empresa:emp,meta,realizado:real});}
-    }
-    return out;
-  }catch(e){ dbg('error','Falha ao parsear METAS'); return []; }
-}
-function parseCancelTexto(text){
-  try{
-    const linhas=text.split(/\r?\n/), out=[]; let empresa=null,itens=[],total=0; const push=()=>{if(empresa) out.push({empresa,itens:[...itens],total});};
-    for(const raw of linhas){
-      const l=raw.trim();
-      const cab=l.match(/^\*\s*([^*\-–]+?)\s*[\-–]\s*R\$\s*([0-9\._.,]+)/);
-      if(cab){push();empresa=cab[1].trim();itens=[];total=num(cab[2]);continue;}
-      const it=l.match(/^(?:[\p{Emoji}\p{So}\p{Sk}\p{Sc}\p{P}]{1,3})?\s*([^\-–]+?)\s*[\-–]\s*R\$\s*([0-9\._.,]+)/u);
-      if(it && empresa){itens.push({nome:it[1].trim(),valor=num(it[2])});}
-    } push(); return out;
-  }catch(e){ dbg('error','Falha ao parsear CANCELAMENTOS'); return []; }
-}
-function aggregateSatisfacao(arr){
-  try{
-    const map={},bucket=w=>{const s=String(w||'').toLowerCase(); if(s.startsWith('ótim')||s.startsWith('otim'))return 'Excelente'; if(s.startsWith('bom'))return 'Bom'; if(s.startsWith('regular'))return 'Regular'; if(s.startsWith('ruim'))return 'Ruim'; return null;};
-    const fields=['ambiente','atendimento','comida','musica','climatizacao','bebidas','iluminacao'];
-    arr.forEach(r=>{const k=norm(r.empresa||r.Empresa||''); if(!map[k]) map[k]={Excelente:0,Bom:0,Regular:0,Ruim:0}; fields.forEach(f=>{const b=bucket(r[f]); if(b) map[k][b]++;});});
-    return map;
-  }catch(e){ dbg('error','Falha ao agregar SATISFAÇÃO'); return {}; }
-}
-
-/* ========= API: TRAVAS por EMPRESA ========= */
+/* ======= API ======= */
 async function fetchTravasPorEmpresa(empresa, periodo){
   const qs = `?empresa=${encodeURIComponent(empresa)}${periodo?`&periodo=${encodeURIComponent(periodo)}`:''}`;
   const url = API_BASE + qs;
-  try{
-    const res = await fetch(url, { cache:'no-store' });
-    const text = await res.text();
-    if(!res.ok){ dbg('error',`TRAVAS ${empresa}: HTTP ${res.status}`,{testUrl:url}); throw new Error(text||('HTTP '+res.status)); }
-    let json; try{ json = JSON.parse(text); }catch(e){ dbg('error',`TRAVAS ${empresa}: JSON inválido`,{testUrl:url}); throw new Error('JSON inválido'); }
-    if(json?.ok===false){ dbg('error',`TRAVAS ${empresa}: ${json.error||'erro'}`,{testUrl:url}); throw new Error(json.error||'Erro do endpoint'); }
-    dbg('log',`TRAVAS ${empresa}: OK`,{testUrl:url});
-    if (json?.empresa) return json;
-    if (Array.isArray(json?.data)) return json.data.find(r=>norm(r.empresa||r.Empresa)===norm(empresa)) || json.data[0];
-    if (Array.isArray(json)) return json.find(r=>norm(r.empresa||r.Empresa)===norm(empresa)) || json[0];
-    return json;
-  }catch(err){
-    throw err;
-  }
+  const res = await fetch(url, {cache:'no-store'});
+  const txt = await res.text();
+  if(!res.ok) throw new Error(`HTTP ${res.status} • ${txt.slice(0,120)}`);
+  let json; try{ json=JSON.parse(txt);}catch{ throw new Error('JSON inválido do endpoint'); }
+  if(json?.ok===false) throw new Error(json.error||'Erro do endpoint');
+  if (json?.empresa) return json;
+  if (Array.isArray(json?.data)) return json.data.find(r=>norm(r.empresa||r.Empresa)===norm(empresa)) || json.data[0];
+  if (Array.isArray(json)) return json.find(r=>norm(r.empresa||r.Empresa)===norm(empresa)) || json[0];
+  return json;
 }
 
-/* ========= UI ========= */
+/* ======= UI ======= */
 document.getElementById('empresa').addEventListener('change', run);
 document.getElementById('periodo').addEventListener('change', run);
 window.addEventListener('DOMContentLoaded', run);
 
-/* ========= Render principal ========= */
+/* ======= RENDER ======= */
 async function run(){
   const empSel=document.getElementById('empresa').value;
   const periodo=document.getElementById('periodo').value;
-  const container=document.getElementById('content'); 
-  document.getElementById('dbg-body').innerHTML='';
+  const container=document.getElementById('content');
   container.innerHTML='<div style="padding:12px;color:#64748b">Carregando…</div>';
 
-  // metas/cancel/sat
-  const qs=periodo?`?periodo=${encodeURIComponent(periodo)}`:'';
-  let metas=[],cancel=[],satAgg={};
-  try{
-    const [mTxt,cTxt,sJs]=await Promise.all([
-      fetch(URL_METAS+qs).then(r=>r.text()),
-      fetch(URL_CANCEL+qs).then(r=>r.text()),
-      fetch(URL_SAT+qs).then(r=>r.json())
-    ]);
-    metas=parseMetasTexto(mTxt);
-    cancel=parseCancelTexto(cTxt);
-    satAgg=aggregateSatisfacao(sJs);
-    dbg('log','Metas/Cancel/Sat OK');
-  }catch(e){ dbg('error','Falha ao carregar Metas/Cancel/Sat'); }
-
   const empresas = empSel==='TODAS AS EMPRESAS' ? EMPRESAS : [empSel];
-  const blocks=[];
+  const parts=[];
 
   for(const emp of empresas){
     try{
       const rec = await fetchTravasPorEmpresa(emp, periodo);
-      if(!rec){ blocks.push(renderErro(emp,'Sem dados para esta empresa.')); continue; }
+      if(!rec){ parts.push(renderErro(emp,'Sem dados.')); continue; }
 
-      const travaTotal = aliases(rec, ['travaTotal','trava_total','E2','travaTotalE2'], 0);
-      const fornecLim  = aliases(rec, ['travaCompras','trava_compras','fornecedoresTotal','D2'], 0);
+      const travaTotal = aliases(rec, ['travaTotal','trava_total','E2','travaTotalE2'], 0);          // E2
+      const fornecLim  = aliases(rec, ['travaCompras','trava_compras','fornecedoresTotal','D2'], 0); // D2
       let fonte9Tot    = aliases(rec, ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'], 0);
-      if (!fonte9Tot)  fonte9Tot = getFonte9Total(rec);
+      if (!fonte9Tot)  fonte9Tot = getFonte9Total(rec); // calcula se não vier pronto
       const fornComp   = aliases(rec, ['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'], 0);
-
       const pctTotal = travaTotal>0 ? (fonte9Tot/travaTotal*100) : 0;
       const pctFor   = fornecLim>0  ? (fornComp/fornecLim*100)   : 0;
       const det = rec.fornecedoresDetalhe || rec.detalhesFornecedores || rec.detalhamento || [];
 
-      const empNorm=norm(emp);
-      const m=metas.find(x=>norm(x.empresa)===empNorm) || {meta:0,realizado:0};
-      const c=cancel.find(x=>norm(x.empresa)===empNorm) || {itens:[],total:0};
-      const sat=satAgg[empNorm]||{Excelente:0,Bom:0,Regular:0,Ruim:0};
-
-      blocks.push(renderEmpresa(emp,{travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det,m,c,sat}));
-    }catch(err){
-      blocks.push(renderErro(emp, String(err.message||err)));
+      parts.push(renderEmpresa(emp,{travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det}));
+    }catch(e){
+      parts.push(renderErro(emp, e.message||String(e)));
     }
   }
 
-  if(blocks.length===0){
-    container.innerHTML = `<div style="background:#fff3f3;color:#991b1b;border-radius:12px;padding:12px;box-shadow:var(--shadow)">
-      Não foi possível carregar dados. Veja o Painel de Diagnóstico abaixo.
-    </div>`;
-  }else{
-    container.innerHTML = blocks.join('');
-  }
+  container.innerHTML = parts.join('');
 }
 
-/* ========= Render helpers ========= */
-function renderErro(emp, msg){
+function renderErro(emp,msg){
   return `<section class="company">
     <div class="title">${emp}</div>
     <div style="background:#fff3f3;color:#991b1b;border-radius:12px;padding:12px;box-shadow:0 1px 8px rgba(0,0,0,.06)">
@@ -282,93 +177,53 @@ function renderErro(emp, msg){
 }
 
 function renderEmpresa(emp, data){
-  const {travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det,m,c,sat} = data;
+  const {travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det} = data;
   const cardForId=idSafe('cardFor', emp);
-  const idM = idSafe('chart','metas');
-  const idC = idSafe('chart','cancel');
-  const idS = idSafe('chart','sat');
 
   const html = `
-    <section class="company">
-      <div class="title">${emp}</div>
-
-      <div class="kpis">
-        <div class="kpi">
-          <div class="label">Trava Total (E2)</div>
-          <div class="value">${moeda(travaTotal)}</div>
-        </div>
-        <div class="kpi ${pctTotal>=80?'red':''}">
-          <div class="label">Valor Total Comprado (Fonte 9)</div>
-          <div class="value">${moeda(fonte9Tot)}</div>
-          <div class="hint">${pctTotal.toFixed(1)}%</div>
-        </div>
+  <section class="company">
+    <div class="title">${emp}</div>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Trava Total (E2)</div>
+        <div class="value">${moeda(travaTotal)}</div>
       </div>
-
-      <div class="kpis">
-        <div class="kpi">
-          <div class="label">Fornecedores Total (D2)</div>
-          <div class="value">${moeda(fornecLim)}</div>
-        </div>
-        <div class="kpi ${pctFor>=80?'red':''}" id="${cardForId}" style="cursor:pointer">
-          <div class="label">Valor Já Comprado (Fornecedores · C2→C19)</div>
-          <div class="value">${moeda(fornComp)}</div>
-          <div class="hint">${pctFor.toFixed(1)}%</div>
-        </div>
+      <div class="kpi ${pctTotal>=80?'red':''}">
+        <div class="label">Valor Total Comprado (Fonte 9)</div>
+        <div class="value">${moeda(fonte9Tot)}</div>
+        <div class="hint">${pctTotal.toFixed(1)}%</div>
       </div>
-
-      <div class="grid">
-        <div class="card">
-          <div class="title">Metas x Realizado</div>
-          <canvas id="${idM}"></canvas>
-          <div class="hint" style="margin-top:8px">
-            ${(m.meta>0?(m.realizado/m.meta*100):0)>100?'🚨 Estouro':'✅ Dentro do limite'}
-          </div>
-        </div>
-        <div class="card">
-          <div class="title">Cancelamentos (Top itens)</div>
-          <canvas id="${idC}"></canvas>
-        </div>
-        <div class="card">
-          <div class="title">Satisfação dos Clientes</div>
-          <canvas id="${idS}"></canvas>
-        </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Fornecedores Total (D2)</div>
+        <div class="value">${moeda(fornecLim)}</div>
       </div>
-    </section>
-  `;
+      <div class="kpi ${pctFor>=80?'red':''}" id="${cardForId}" style="cursor:pointer">
+        <div class="label">Valor Já Comprado (Fornecedores · C2→C19)</div>
+        <div class="value">${moeda(fornComp)}</div>
+        <div class="hint">${pctFor.toFixed(1)}%</div>
+      </div>
+    </div>
+  </section>`;
 
+  // evento de modal
   queueMicrotask(()=>{
-    // modal fornecedores
     const el=document.getElementById(cardForId);
-    if(el){
-      el.addEventListener('click',()=>{
-        const title=document.getElementById('modal-title');
-        title.textContent=`Detalhamento Fornecedores — ${emp}`;
-        const ul=document.getElementById('modal-list'); ul.innerHTML='';
-        (det||[]).forEach(d=>{
-          const nome = d.nome ?? d.planocontas ?? d.categoria ?? '—';
-          const val  = Number(d.valor ?? d.total ?? 0);
-          const li=document.createElement('li');
-          li.textContent = `${nome} — ${moeda(Math.abs(val))}`;
-          ul.appendChild(li);
-        });
-        document.getElementById('modal').style.display='flex';
+    if(!el) return;
+    el.addEventListener('click',()=>{
+      const title=document.getElementById('modal-title');
+      title.textContent=`Detalhamento Fornecedores — ${emp}`;
+      const ul=document.getElementById('modal-list'); ul.innerHTML='';
+      (det||[]).forEach(d=>{
+        const nome = d.nome ?? d.planocontas ?? d.categoria ?? '—';
+        const val  = Number(d.valor ?? d.total ?? 0);
+        const li=document.createElement('li');
+        li.textContent = `${nome} — ${moeda(Math.abs(val))}`;
+        ul.appendChild(li);
       });
-    }
-
-    // charts
-    const ctxM=document.getElementById(idM)?.getContext('2d');
-    if(ctxM){
-      new Chart(ctxM,{type:'bar',data:{labels:['Meta','Realizado'],datasets:[{data:[m.meta||0,m.realizado||0]}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-    }
-    const ctxC=document.getElementById(idC)?.getContext('2d');
-    if(ctxC){
-      const topC=[...(c.itens||[])].sort((a,b)=>b.valor-a.valor).slice(0,10);
-      new Chart(ctxC,{type:'bar',data:{labels:topC.map(i=>i.nome),datasets:[{data:topC.map(i=>i.valor)}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-    }
-    const ctxS=document.getElementById(idS)?.getContext('2d');
-    if(ctxS){
-      new Chart(ctxS,{type:'pie',data:{labels:['Excelente','Bom','Regular','Ruim'],datasets:[{data:[sat.Excelente,sat.Bom,sat.Regular,sat.Ruim]}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
-    }
+      document.getElementById('modal').style.display='flex';
+    });
   });
 
   return html;
