@@ -184,7 +184,8 @@ async function run(){
         <div class="kpi"><div class="label">Compras Realizadas</div><div class="value">${moeda(m.realizado)}</div><div class="hint">${m.meta>0?(m.realizado/m.meta*100).toFixed(1):'0.0'}% do limite</div></div>
         <div class="kpi"><div class="label">Cancelamentos (R$)</div><div class="value">${moeda(c.total)}</div><div class="hint">${(c.itens||[]).length} itens</div></div>
         <div class="kpi"><div class="label">Trava de Compras</div><div class="value">${trav?moeda(travaCompras):'—'}</div><div class="hint">${trav?consumoPct.toFixed(1)+'% consumidos':'—'}</div></div>
-        <div class="kpi"><div class="label">Trava Total (Fonte 9)</div><div class="value">${trav?moeda(totalGeral9):'—'}</div><div class="hint">somente fonte 9</div></div>
+        <div class="kpi"><div class="label">Trava Total</div><div class="value">${trav?moeda(Number(trav.travaTotal)||0):'—'}</div><div class="hint">valor direto da planilha</div></div>
+<div class="kpi"><div class="label">Total Fonte 9</div><div class="value">${trav?moeda(totalGeral9):'—'}</div><div class="hint">somente fonte 9</div></div>
         <div class="kpi"><div class="label">Fornecedores (Fonte 9)</div><div class="value">${trav?moeda(fornecedores9):'—'}</div><div class="hint">${trav?(sobra>=0?'Sobra: ':'Estouro: ')+moeda(Math.abs(sobra)):'—'}</div></div>
       </div>
       <div class="grid">
