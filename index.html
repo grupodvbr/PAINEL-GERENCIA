@@ -26,7 +26,6 @@
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:12px}
   .card{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
   .card .title{font-weight:700;margin-bottom:8px}
-  /* Modal */
   #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:1000}
   #modal .box{background:#fff;padding:18px;border-radius:12px;max-width:560px;width:92%;max-height:80%;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   #modal .box h3{margin:0 0 8px}
@@ -64,7 +63,6 @@
   <div id="content" class="section"></div>
 </div>
 
-<!-- Modal -->
 <div id="modal">
   <div class="box">
     <h3 id="modal-title">Detalhamento Fornecedores</h3>
@@ -75,7 +73,7 @@
 
 <script>
 /* ========= ENDPOINTS ========= */
-const API_BASE = 'https://script.google.com/macros/s/AKfycbxUf9oERSm53CpZQKkpp3mFXR3aLWc4tzSVW8DPHqsGvVt-keB_KtzAJiIgLMm9GYnB/exec'; // TRAVAS (consolidado por empresa)
+const API_BASE = 'https://script.google.com/macros/s/AKfycbxUf9oERSm53CpZQKkpp3mFXR3aLWc4tzSVW8DPHqsGvVt-keB_KtzAJiIgLMm9GYnB/exec';
 const URL_METAS  = 'https://script.google.com/macros/s/AKfycbziCPWWJxxfrnSeT3RHsNbw21z9MfnnB8JpV7ZQcZnvUQQ7dL3lVJdpUG7epACVjFaO/exec';
 const URL_CANCEL = 'https://script.google.com/macros/s/AKfycbzM1mmixFkFE5tbC-0Evc6GVyZEJkh88HCikNK08FujRwCrgUA1e_E29nMHip81kRPoSg/exec';
 const URL_SAT    = 'https://script.google.com/macros/s/AKfycbyK3A5CDn_EgA3pbRVToh87_qKWvbIry886OkR1AdkJi7RyvSgcwY0BmRqhbKQnEKwgrA/exec';
@@ -88,26 +86,83 @@ const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'B
 const aliases=(obj,keys,def=0)=>{for(const k of keys){if(obj&&obj[k]!=null&&obj[k]!=='' && !isNaN(Number(obj[k]))) return Number(obj[k]);}return def;};
 const idSafe=(p,k)=>`${p}-${norm(k).replace(/[^A-Z0-9]+/g,'-')}-${Math.random().toString(36).slice(2,6)}`;
 
-/* ========= FALLBACK: calcula Total Fonte 9 se o endpoint não mandar pronto ========= */
+/* ========= FONTE 9: pega pronto ou calcula pela COLUNA C (ou listas genéricas) ========= */
 function getFonte9Total(rec){
-  const keys = ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'];
-  for(const k of keys){ if(rec && rec[k]!=null && rec[k]!=='' && !isNaN(Number(rec[k]))) return Number(rec[k]); }
+  // 1) chaves comuns prontas
+  const ready = ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'];
+  for(const k of ready){ if(rec && rec[k]!=null && rec[k]!=='' && !isNaN(Number(rec[k]))) return Number(rec[k]); }
+
+  // 2) detalhe explícito de fonte 9
   if (Array.isArray(rec?.fonte9Detalhe)) {
-    return rec.fonte9Detalhe.reduce((acc, it)=> acc + Math.abs(Number(it.valor||it.total||0)), 0);
+    const t = rec.fonte9Detalhe.reduce((acc, it)=> acc + Math.abs(Number(it.valor||it.total||0)), 0);
+    if (t) return t;
   }
+
+  // 3) estrutura por categorias/subs (somar apenas font==9)
   if (Array.isArray(rec?.categorias)) {
     let total = 0;
     rec.categorias.forEach(cat=>{
       const subs = Array.isArray(cat?.subs) ? cat.subs : [];
       subs.forEach(s=>{
         const f = Number(s.font);
-        if (f===9 || s.isSub===true || s.font==null) {
-          total += Math.abs(Number(s.valor||0));
-        }
+        if (f===9 || s.isSub===true || s.font==null) total += Math.abs(Number(s.valor||0));
       });
     });
-    return total;
+    if (total) return total;
   }
+
+  // 4) listas genéricas com {valor, font}
+  const lists = [rec?.todos, rec?.itens, rec?.rows, rec?.linhas];
+  for(const L of lists){
+    if (Array.isArray(L)){
+      let total=0, any=false;
+      L.forEach(r=>{
+        const f = Number(r?.font);
+        const v = Number(r?.valor ?? r?.total ?? 0);
+        if (f===9){ total += Math.abs(v); any=true; }
+      });
+      if (any) return total;
+    }
+  }
+
+  // 5) coluna C enviada isolada (C1..Cn)
+  const cols = [rec?.colCAll, rec?.colC, rec?.colunaC, rec?.colunaValores];
+  for(const col of cols){
+    if (Array.isArray(col)){
+      let total=0, any=false;
+      col.forEach(item=>{
+        if (item && typeof item==='object'){
+          const f = Number(item.font);
+          const v = Number(item.valor ?? item.total ?? 0);
+          if (isFinite(v) && (isNaN(f) || f===9)){ total += Math.abs(v); any=true; }
+        }else{
+          const v = Number(item||0);
+          if (isFinite(v)){ total += Math.abs(v); any=true; }
+        }
+      });
+      if (any) return total;
+    }
+  }
+
+  // 6) grade 2D (array de arrays): usa a COLUNA 3 (C) como valores
+  if (Array.isArray(rec?.grid) && Array.isArray(rec.grid[0])) {
+    let total=0, any=false;
+    for (const row of rec.grid){
+      const v = Number(row[2] ?? 0); // C
+      if (isFinite(v)){ total += Math.abs(v); any=true; }
+    }
+    if (any) return total;
+  }
+  if (Array.isArray(rec?.tabela) && Array.isArray(rec.tabela[0])) {
+    let total=0, any=false;
+    for (const row of rec.tabela){
+      const v = Number(row[2] ?? 0); // C
+      if (isFinite(v)){ total += Math.abs(v); any=true; }
+    }
+    if (any) return total;
+  }
+
+  console.warn('Fonte9 total não encontrado em campos padrão; retornando 0. Payload:', rec);
   return 0;
 }
 
@@ -192,8 +247,9 @@ async function run(){
       const travaTotal = aliases(rec, ['travaTotal','trava_total','E2','travaTotalE2'], 0);             // E2
       const fornecLim  = aliases(rec, ['travaCompras','trava_compras','fornecedoresTotal','D2'], 0);    // D2
       let fonte9Tot    = aliases(rec, ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'], 0);
-      if (!fonte9Tot)  fonte9Tot = getFonte9Total(rec); // fallback
+      if (!fonte9Tot)  fonte9Tot = getFonte9Total(rec); // calcula por coluna C / fonte 9
       const fornComp   = aliases(rec, ['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'], 0);
+
       const pctTotal = travaTotal>0 ? (fonte9Tot/travaTotal*100) : 0;
       const pctFor   = fornecLim>0  ? (fornComp/fornecLim*100)   : 0;
       const det = rec.fornecedoresDetalhe || rec.detalhesFornecedores || rec.detalhamento || [];
@@ -204,7 +260,6 @@ async function run(){
       const c=cancel.find(x=>norm(x.empresa)===empNorm) || {itens:[],total:0};
       const sat=satAgg[empNorm]||{Excelente:0,Bom:0,Regular:0,Ruim:0};
 
-      // HTML + gráficos
       parts.push(renderEmpresa(emp,{travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det,m,c,sat}));
     }catch(err){
       console.error('Erro ao carregar', emp, err);
@@ -280,7 +335,6 @@ function renderEmpresa(emp, data){
     </section>
   `;
 
-  // vincula eventos + desenha gráficos
   queueMicrotask(()=>{
     // modal fornecedores
     const el=document.getElementById(cardForId);
