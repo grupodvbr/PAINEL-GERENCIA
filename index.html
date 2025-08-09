@@ -56,8 +56,8 @@
   #modal .close{appearance:none;border:none;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:#334155}
   #modal .list{list-style:none;margin:0;padding:0}
   #modal .item{display:flex;justify-content:space-between;gap:12px;padding:10px;border-bottom:1px dashed #e5e7eb}
-  #modal .item b{font-weight:600}
-  #modal .item .val{white-space:nowrap}
+  #modal .item b{font-weight:600;flex:1;min-width:0}
+  #modal .item .val{flex:0 0 auto;white-space:nowrap;text-align:right}
   .empty{color:#6b7280;font-size:13px;padding:8px}
 </style>
 </head>
@@ -99,7 +99,8 @@
 
 <script>
 /* ======= CONFIG ======= */
-const API_BASE='https://script.google.com/macros/s/AKfycbyDGQ-srD7OFMORoRo7ZH2BDaz_tJVVlsqjdlLTI0OpkEKv3tQ5Ny02h3blo7GKjsFEIw/exec';
+/* SEU ENDPOINT NOVO */
+const API_BASE='https://script.google.com/macros/s/AKfycbzQEC7E3R7LFn7WKvjhG3N3qxb-N-q96EAoRckfydpv57m7EhRmmAa2s2b5oViGv07P_A/exec';
 const EMPRESAS=['MERCATTO DELICIA','DELICIA GOURMET','VILLA GOURMET','M. KIDS','PADARIA DELICIA'];
 
 /* ======= HELPERS ======= */
@@ -127,63 +128,16 @@ function progressCalc(limit, spent, perStr){
   return {pct,available,forecast,forecastPct,status};
 }
 
-/* Total “fonte 9” (planos de contas) */
-function fonte9Total(rec){
-  const keys=['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'];
-  for(const k of keys){const v=rec?.[k]; if(v!==undefined&&v!==''&&!isNaN(Number(v))) return Number(v);}
-  if(Array.isArray(rec?.fonte9Detalhe)) return rec.fonte9Detalhe.reduce((a,i)=>a+Math.abs(Number(i.valor??i.total??0)),0);
-  if(Array.isArray(rec?.categorias)){
-    let t=0; rec.categorias.forEach(c=>(c.subs||[]).forEach(s=>{const f=Number(s.font); if(f===9||s.isSub===true||s.font==null) t+=Math.abs(Number(s.valor||0))})); return t;
-  }
-  return 0;
-}
-
-/* Planos (usa planosFonte9; fallbacks se faltar) */
-function extractPlanos(rec){
-  if (Array.isArray(rec?.planosFonte9) && rec.planosFonte9.length) {
-    return rec.planosFonte9.map(p=>({nome:String(p.nome??'—'),valor:Math.abs(Number(p.valor??0))}));
-  }
-  const PLAN_NAME_COLS=[1,6,11,16,21]; // B,G,L,Q,V (grid/tabela)
-  const planosFromGrid = (grid=>{
-    if(!Array.isArray(grid)||!Array.isArray(grid[0])) return [];
-    const map=new Map();
-    grid.forEach(row=>{
-      PLAN_NAME_COLS.forEach(idx=>{
-        const nome=row[idx]; const val=row[idx+1];
-        if(nome!=null && nome!=='' && val!=null && val!==''){
-          const v=Number(String(val).toString().replace(/[^\d\-.,]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'));
-          if(!isNaN(v)) map.set(String(nome),(map.get(String(nome))||0)+Math.abs(v));
-        }
-      });
-    });
-    return Array.from(map, ([nome,valor])=>({nome,valor}));
-  })(rec?.grid || rec?.tabela);
-  if (planosFromGrid.length) return planosFromGrid;
-
-  if (Array.isArray(rec?.fonte9Detalhe) && rec.fonte9Detalhe.length) {
-    return rec.fonte9Detalhe.map(i=>({nome:i.nome??i.planocontas??i.categoria??'—',valor:Math.abs(Number(i.valor??i.total??0))}));
-  }
-  if (Array.isArray(rec?.categorias)){
-    const out=[]; rec.categorias.forEach(c=>(c.subs||[]).forEach(s=>{const f=Number(s.font); if(f===9||s.isSub===true||s.font==null) out.push({nome:s.nome??'—',valor:Math.abs(Number(s.valor||0))})}));
-    if(out.length) return out;
-  }
-  if (Array.isArray(rec?.fornecedoresDetalhe) && rec.fornecedoresDetalhe.length) {
-    return rec.fornecedoresDetalhe.map(i=>({nome:i.nome??'—',valor:Math.abs(Number(i.valor||0))}));
-  }
-  return [];
-}
-
 /* API */
 async function getEmpresaPeriodo(emp, periodo){
   const c=getC(emp,periodo); if(c) return c;
   const url=`${API_BASE}?empresa=${encodeURIComponent(emp)}${periodo?`&periodo=${encodeURIComponent(periodo)}`:''}`;
-  const r=await fetch(url,{cache:'no-store'}); const t=await r.text(); if(!r.ok) throw new Error(t);
+  const r=await fetch(url,{cache:'no-store'});
+  const t=await r.text();
+  if(!r.ok) throw new Error(t);
   let j; try{j=JSON.parse(t);}catch{throw new Error('JSON inválido');}
-  let rec=j;
-  if(j?.empresa) rec=j;
-  else if(Array.isArray(j?.data)) rec=j.data.find(x=>norm(x.empresa||x.Empresa)===norm(emp))||j.data[0];
-  else if(Array.isArray(j)) rec=j.find(x=>norm(x.empresa||x.Empresa)===norm(emp))||j[0];
-  setC(emp,periodo,rec); return rec;
+  setC(emp,periodo,j); 
+  return j; /* j já vem no formato certo do seu Apps Script */
 }
 
 /* UI + corrida de execução para evitar “flicker” */
@@ -202,15 +156,14 @@ function openModal(title, items){
   const empty=document.getElementById('modal-empty');
   ul.innerHTML='';
 
-  const arr=(items||[]).slice();
+  const arr=(items||[]).slice().sort((a,b)=>Math.abs(b.valor)-Math.abs(a.valor));
   if(arr.length){
     empty.style.display='none';
     arr.forEach(d=>{
       const li=document.createElement('li'); li.className='item';
       const b=document.createElement('b'); b.textContent=d.nome||'—';
       const v=document.createElement('span'); v.className='val';
-      if(d.fmt==='pct'){ v.textContent = `${(Number(d.valor)||0).toFixed(1)}%`; }
-      else{ v.textContent = moeda(Math.abs(Number(d.valor||0))); }
+      v.textContent = moeda(Math.abs(Number(d.valor||0)));
       li.appendChild(b); li.appendChild(v); ul.appendChild(li);
     });
   }else{
@@ -243,16 +196,16 @@ async function run(){
       const rec=await getEmpresaPeriodo(emp, periodo);
       if (runId !== currentRun) return;
 
-      const periodOk = rec?.matchesPeriod !== false;
+      // Campos vindos do App Script (já só com os planos permitidos)
+      const travaTotal           = Number(rec.travaTotal || 0);         // E2
+      const fornecLim            = Number(rec.travaCompras || 0);       // D2
+      const gastoFontePlanos     = Number(rec.totalFonte9 || 0);        // soma dos planos permitidos
+      const fornecedoresComprado = Number(rec.fornecedoresComprado || 0); // soma C (C2..C19) – também limitado pelo seu script
+      const planos               = Array.isArray(rec.planosFonte9) ? rec.planosFonte9 : [];
+      const periodOk             = !!rec.periodo;
 
-      const travaTotal= periodOk ? aliases(rec,['travaTotal','trava_total','E2','travaTotalE2'],0) : 0;
-      const fornecLim = periodOk ? aliases(rec,['travaCompras','trava_compras','fornecedoresTotal','D2'],0) : 0;
-      const fonte9    = periodOk ? fonte9Total(rec) : 0;
-      const fornComp  = periodOk ? aliases(rec,['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'],0) : 0;
-      const planos    = periodOk ? extractPlanos(rec) : [];
-
-      const gTotal=progressCalc(travaTotal, fonte9, periodo);
-      const gForn =progressCalc(fornecLim,  fornComp, periodo);
+      const gTotal=progressCalc(travaTotal, gastoFontePlanos, rec.periodo || periodo);
+      const gForn =progressCalc(fornecLim,  fornecedoresComprado, rec.periodo || periodo);
 
       const sec=document.createElement('section'); sec.className='company';
       sec.innerHTML = `
@@ -262,7 +215,7 @@ async function run(){
             <div class="label">Trava Total (E2)</div>
             <div class="value">${moeda(travaTotal)}</div>
             <div class="hint">
-              Gasto: <b>${moeda(fonte9)}</b> • ${gTotal.pct.toFixed(1)}%<br/>
+              Gasto: <b>${moeda(gastoFontePlanos)}</b> • ${gTotal.pct.toFixed(1)}%<br/>
               Disponível: <b>${moeda(gTotal.available)}</b>
             </div>
             <div class="progress"><span style="width:${Math.min(gTotal.pct,100)}%"></span></div>
@@ -274,7 +227,7 @@ async function run(){
             <div class="label">Fornecedores Total (D2)</div>
             <div class="value">${moeda(fornecLim)}</div>
             <div class="hint">
-              Já comprado: <b>${moeda(fornComp)}</b> • ${gForn.pct.toFixed(1)}%<br/>
+              Já comprado: <b>${moeda(fornecedoresComprado)}</b> • ${gForn.pct.toFixed(1)}%<br/>
               Disponível: <b>${moeda(gForn.available)}</b><br/>
               Previsão fim do mês: <b>${moeda(gForn.forecast)}</b> (${gForn.forecastPct.toFixed(1)}%)
             </div>
@@ -284,7 +237,7 @@ async function run(){
         </div>
       `;
       container.appendChild(sec);
-      sec.querySelector('[data-ver-planos]').addEventListener('click',()=>openModal(`Detalhamento Fornecedores — ${emp}`, planos));
+      sec.querySelector('[data-ver-planos]').addEventListener('click',()=>openModal(`Planos — ${emp}`, planos));
 
       // gráfico apenas quando 1 empresa selecionada
       if(empSel!=='TODAS AS EMPRESAS'){
@@ -329,7 +282,7 @@ function renderChartBlock(emp){
 /* Range de meses */
 function monthRange(from,to){let a=parseYYYYMM(from),b=parseYYYYMM(to);if(!a||!b)return[];if(a>b){const t=a;a=b;b=t;}const out=[],c=new Date(a);while(c<=b){out.push(`${c.getFullYear()}-${String(c.getMonth()+1).padStart(2,'0')}`);c.setMonth(c.getMonth()+1);}return out}
 
-/* Séries (valor do ÚLTIMO dia do mês; se não houver dados, 0) */
+/* Série do plano (usa planosFonte9 de cada mês) */
 async function buildSeries(emp, from, to){
   const months=monthRange(from,to), labels=[...months];
   const planMap={};                 // {plano:[v1,v2,...]}
@@ -339,8 +292,7 @@ async function buildSeries(emp, from, to){
   for(let i=0;i<months.length;i++){
     const per=months[i];
     const rec=await getEmpresaPeriodo(emp, per);
-    const periodOk = rec?.matchesPeriod !== false;
-    const planos= periodOk ? extractPlanos(rec) : [];
+    const planos= Array.isArray(rec?.planosFonte9) ? rec.planosFonte9 : [];
     planos.forEach(p=>{
       const nome=String(p.nome);
       const val=Math.abs(Number(p.valor||0));
@@ -350,8 +302,7 @@ async function buildSeries(emp, from, to){
       totalsByMonth[i]+=val;
     });
   }
-  const totalsOverall=totalsByMonth.reduce((a,b)=>a+b,0);
-  return {labels,planMap,plans:[...plansSet].sort(),totalsByMonth,totalsOverall};
+  return {labels,planMap,plans:[...plansSet].sort(),totalsByMonth};
 }
 
 /* Chart */
@@ -378,26 +329,7 @@ async function mountChart(emp, holder, runIdAtMount){
     // Top 10 (mês mais recente)
     const last=cachedSeries.labels.length-1;
     const arr=Object.entries(cachedSeries.planMap).map(([nome,vals])=>({nome,valor:Math.abs(vals[last]||0)})).sort((a,b)=>b.valor-a.valor).slice(0,10);
-    topList.innerHTML=arr.map(i=>`<li data-plan="${i.nome}" style="cursor:pointer">${i.nome} — <b>${moeda(i.valor)}</b></li>`).join('') || '<li>Nada a mostrar.</li>';
-
-    // clique item Top10 → participação no período
-    topList.onclick=(ev)=>{
-      const li=ev.target.closest('li[data-plan]'); if(!li) return;
-      const plan=li.getAttribute('data-plan');
-      showShare(plan);
-    };
-  }
-
-  function showShare(plan){
-    const vals=cachedSeries.planMap[plan]||[];
-    const sumPlan=vals.reduce((a,b)=>a+Math.abs(b||0),0);
-    const sumTot=cachedSeries.totalsByMonth.reduce((a,b)=>a+Math.abs(b||0),0);
-    const pct=sumTot>0?(sumPlan/sumTot*100):0;
-    openModal(`Participação — ${plan}`,[
-      {nome:'Valor no período',valor:sumPlan},
-      {nome:'Total do período',valor:sumTot},
-      {nome:'Participação',fmt:'pct',valor:pct}
-    ]);
+    topList.innerHTML=arr.map(i=>`<li>${i.nome} — <b>${moeda(i.valor)}</b></li>`).join('') || '<li>Nada a mostrar.</li>';
   }
 
   async function draw(){
