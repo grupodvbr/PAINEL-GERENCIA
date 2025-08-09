@@ -24,7 +24,7 @@
   .kpi .hint{color:var(--muted);font-size:12px}
   /* Modal */
   #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:1000}
-  #modal .box{background:#fff;padding:18px 18px 12px;border-radius:12px;max-width:560px;width:92%;max-height:80%;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  #modal .box{background:#fff;padding:18px;border-radius:12px;max-width:560px;width:92%;max-height:80%;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   #modal .box h3{margin:0 0 8px}
   #modal .box ul{margin:10px 0 0;padding-left:18px}
   #modal .box button{margin-top:12px;background:#0ea5e9;color:#fff;border:none;border-radius:10px;padding:8px 12px;cursor:pointer}
@@ -78,18 +78,44 @@ const USER_EMP_MAP={'LUCAS':'MERCATTO DELICIA','MARIA':'DELICIA GOURMET','JOAO':
 /* ========= HELPERS ========= */
 const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
 const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const aliases=(obj,keys,def=0)=>{for(const k of keys){if(obj&&obj[k]!=null&&obj[k]!=='' ) return Number(obj[k]);}return def;};
+const aliases=(obj,keys,def=0)=>{for(const k of keys){if(obj&&obj[k]!=null&&obj[k]!=='' && !isNaN(Number(obj[k]))) return Number(obj[k]);}return def;};
 const idSafe=(p,k)=>`${p}-${norm(k).replace(/[^A-Z0-9]+/g,'-')}-${Math.random().toString(36).slice(2,6)}`;
 
-/* ========= API: busca por EMPRESA (obrigatório) ========= */
+/* ========= FALLBACK: calcula Total Fonte 9 se o endpoint não mandar pronto ========= */
+function getFonte9Total(rec){
+  // 1) chaves comuns do endpoint
+  const keys = ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'];
+  for(const k of keys){ if(rec && rec[k]!=null && rec[k]!=='' && !isNaN(Number(rec[k]))) return Number(rec[k]); }
+
+  // 2) lista detalhada da fonte 9 (se existir)
+  if (Array.isArray(rec?.fonte9Detalhe)) {
+    return rec.fonte9Detalhe.reduce((acc, it)=> acc + Math.abs(Number(it.valor||it.total||0)), 0);
+  }
+
+  // 3) estrutura por categorias/subs: somar apenas font==9
+  if (Array.isArray(rec?.categorias)) {
+    let total = 0;
+    rec.categorias.forEach(cat=>{
+      const subs = Array.isArray(cat?.subs) ? cat.subs : [];
+      subs.forEach(s=>{
+        const f = Number(s.font);
+        if (f===9 || s.isSub===true || s.font==null) {
+          total += Math.abs(Number(s.valor||0));
+        }
+      });
+    });
+    return total;
+  }
+  return 0;
+}
+
+/* ========= API (por EMPRESA) ========= */
 async function fetchTravasPorEmpresa(empresa, periodo){
   const qs = `?empresa=${encodeURIComponent(empresa)}${periodo?`&periodo=${encodeURIComponent(periodo)}`:''}`;
   const res = await fetch(API_BASE + qs);
   let json;
   try{ json = await res.json(); }catch(e){ throw new Error('Resposta não é JSON'); }
   if(json?.ok===false){ throw new Error(json.error || 'Erro do endpoint'); }
-  // Formatos aceitos:
-  // {empresa:..., ...}  |  {data:[{empresa:...}]}  |  [{empresa:...}]
   if (json?.empresa) return json;
   if (Array.isArray(json?.data)) return json.data.find(r=>norm(r.empresa||r.Empresa)===norm(empresa)) || json.data[0];
   if (Array.isArray(json)) return json.find(r=>norm(r.empresa||r.Empresa)===norm(empresa)) || json[0];
@@ -103,10 +129,9 @@ document.getElementById('btn').addEventListener('click',()=>{
   document.getElementById('empresa').value=empAuto;
   run();
 });
-
 window.addEventListener('DOMContentLoaded', () => run());
 
-/* ========= Render ========= */
+/* ========= Render principal ========= */
 async function run(){
   const empSel=document.getElementById('empresa').value;
   const periodo=document.getElementById('periodo').value;
@@ -131,7 +156,7 @@ async function run(){
   container.innerHTML = sections.join('');
 }
 
-/* ========= Render Helpers ========= */
+/* ========= Render helpers ========= */
 function renderErro(emp, msg){
   return `<section class="company">
     <div class="title">${emp}</div>
@@ -142,11 +167,13 @@ function renderErro(emp, msg){
 }
 
 function renderEmpresa(emp, rec){
-  // Aliases de campos do endpoint
+  // Campos do endpoint (com aliases) — linhas E2/D2 e somatórios
   const travaTotal = aliases(rec, ['travaTotal','trava_total','E2','travaTotalE2'], 0);             // E2
   const fornecLim  = aliases(rec, ['travaCompras','trava_compras','fornecedoresTotal','D2'], 0);    // D2
-  const fonte9Tot  = aliases(rec, ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'], 0);
+  let fonte9Tot    = aliases(rec, ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'], 0);
+  if (!fonte9Tot)  fonte9Tot = getFonte9Total(rec); // fallback: calcula no cliente
   const fornComp   = aliases(rec, ['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'], 0);
+
   const pctTotal = travaTotal>0 ? (fonte9Tot/travaTotal*100) : 0;
   const pctFor   = fornecLim>0  ? (fornComp/fornecLim*100)   : 0;
   const det = rec.fornecedoresDetalhe || rec.detalhesFornecedores || rec.detalhamento || [];
@@ -183,7 +210,7 @@ function renderEmpresa(emp, rec){
     </section>
   `;
 
-  // vincula evento depois que inserir no DOM
+  // Modal do detalhamento
   queueMicrotask(()=>{
     const el=document.getElementById(cardForId);
     if(!el) return;
@@ -205,6 +232,5 @@ function renderEmpresa(emp, rec){
   return html;
 }
 </script>
-
 </body>
 </html>
