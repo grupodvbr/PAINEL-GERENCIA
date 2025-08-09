@@ -69,12 +69,17 @@ const URL_TRAVAS = 'https://script.google.com/macros/s/AKfycbzkj-mfUUqwetIY5JKj0
 
 // ---------- HELPERS ----------
 const EMPRESAS=['MERCATTO DELICIA','DELICIA GOURMET','VILLA GOURMET','M. KIDS','PADARIA DELICIA'];
-const MAP_TRAVAS={
-  'MERCATTO DELICIA':'MERCATTO DELICIA', // ajuste para 'MERCATTO' se o endpoint devolver assim
-  'DELICIA GOURMET':'DELICIA GOURMET',
-  'VILLA GOURMET':'VILLA GOURMET',
-  'M. KIDS':'M. KIDS',
-  'PADARIA DELICIA':'PADARIA DELICIA'
+const MAP_TRAVAS={...EMPRESAS.reduce((a,e)=>(a[e]=e,a),{})};
+const USER_EMP_MAP={
+  'LUCAS':'MERCATTO DELICIA',
+  'MARIA':'DELICIA GOURMET',
+  'JOAO':'VILLA GOURMET',
+  'PATRICIA':'M. KIDS',
+  'CARLOS':'PADARIA DELICIA',
+  'FERNANDA':'MERCATTO DELICIA',
+  'BRUNO':'DELICIA GOURMET',
+  'ANA':'VILLA GOURMET',
+  'ROBERTO':'PADARIA DELICIA'
 };
 const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
 const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
@@ -82,19 +87,19 @@ function num(v){const s=String(v||'').replace(/[^0-9,.-]/g,'').replace(/\.(?=\d{
 function pill(txt,kind){return `<span class="pill ${kind}">${txt}</span>`;}
 function idOf(b){return `${b}-${Math.random().toString(36).slice(2,8)}`;}
 
-// fonte 9 (subcategorias) somada; fonte 10 (categorias) ignorada
+// ---------- SOMA FONTE 9 ----------
 function somasPorFonte9(t){
   const categorias=Array.isArray(t?.categorias)?t.categorias:[];
-  const pickFont9=s=> (s && (s.font===9 || s.isSub===true || s.font==null));
-  const allSubs9=categorias.flatMap(c=>(c.subs||[]).filter(pickFont9));
-  const totalGeral9=allSubs9.reduce((a,s)=>a+Math.abs(Number(s.valor||0)),0);
+  const isFont9=s=>Number(s.font)===9 || s.isSub===true || s.font==null;
+  const subs9=categorias.flatMap(c=>(c.subs||[]).filter(isFont9));
+  const totalGeral9=subs9.reduce((a,s)=>a+Math.abs(Number(s.valor||0)),0);
   const catFor=categorias.find(c=>norm(c.nome).includes('FORNECEDOR'));
-  const forSubs9=(catFor?.subs||[]).filter(pickFont9);
+  const forSubs9=(catFor?.subs||[]).filter(isFont9);
   const fornecedores9=forSubs9.reduce((a,s)=>a+Math.abs(Number(s.valor||0)),0);
   return {totalGeral9, fornecedores9, forSubs9};
 }
 
-// ---------- Parsers (TEXTO) ----------
+// ---------- PARSERS ----------
 function parseMetasTexto(text){
   const linhas=text.split(/\r?\n/).map(l=>l.trim()), out=[]; let emp=null;
   for(let i=0;i<linhas.length;i++){
@@ -122,15 +127,25 @@ function aggregateSatisfacao(arr){
   return map;
 }
 
-// ---------- RUN ----------
-document.getElementById('btn').addEventListener('click', run);
+// ---------- EVENTOS ----------
+document.getElementById('btn').addEventListener('click',()=>{
+  const usuarioSel=document.getElementById('usuario').value;
+  const empAuto=USER_EMP_MAP[norm(usuarioSel)] || 'TODAS AS EMPRESAS';
+  document.getElementById('empresa').value=empAuto;
+  run();
+});
 window.addEventListener('DOMContentLoaded', () => {
   const params=new URLSearchParams(location.search);
-  const emp=params.get('empresa');
-  if(emp) document.getElementById('empresa').value = decodeURIComponent(emp);
+  const usuario=params.get('usuario');
+  if(usuario){
+    document.getElementById('usuario').value=decodeURIComponent(usuario);
+    const empAuto=USER_EMP_MAP[norm(usuario)] || 'TODAS AS EMPRESAS';
+    document.getElementById('empresa').value=empAuto;
+  }
   run();
 });
 
+// ---------- EXECUÇÃO ----------
 async function run(){
   const empSel=document.getElementById('empresa').value;
   const periodo=document.getElementById('periodo').value;
@@ -150,11 +165,7 @@ async function run(){
 
   for(const emp of empresas){
     const empNorm=norm(emp); const travasNome=MAP_TRAVAS[emp]||emp; const travasKey=norm(travasNome);
-    // TRAVAS por empresa
     let travas=await fetch(URL_TRAVAS+(qs+(qs?'&':'?')+'empresa='+encodeURIComponent(travasNome))).then(r=>r.json()).catch(()=>[]);
-    if(!Array.isArray(travas) || travas.length===0){
-      travas=await fetch(URL_TRAVAS+(qs+(qs?'&':'?')+'empresa='+encodeURIComponent(emp))).then(r=>r.json()).catch(()=>[]);
-    }
     let trav = Array.isArray(travas) ? (travas.find(x=>norm(x.empresa)===travasKey) || travas.find(x=>norm(x.empresa)===empNorm) || travas[0]) : null;
 
     const m=metas.find(x=>norm(x.empresa)===empNorm) || {meta:0,realizado:0};
@@ -162,21 +173,19 @@ async function run(){
 
     const {totalGeral9, fornecedores9, forSubs9} = somasPorFonte9(trav||{});
     const travaCompras=trav?Number(trav.travaCompras||0):0;
-    const travaTotalCalc=totalGeral9;
-    const fornecAbs=fornecedores9;
-    const sobra=travaCompras - fornecAbs;
-    const consumoPct=travaCompras>0 ? (fornecAbs/travaCompras*100):0;
+    const sobra=travaCompras - fornecedores9;
+    const consumoPct=travaCompras>0 ? (fornecedores9/travaCompras*100):0;
 
     const sec=document.createElement('section'); sec.className='company';
     sec.innerHTML=`
       <div class="title">${emp}</div>
       <div class="kpis">
-        <div class="kpi"><div class="label">Meta de Compras</div><div class="value">${moeda(m.meta)}</div><div class="hint">—</div></div>
+        <div class="kpi"><div class="label">Meta de Compras</div><div class="value">${moeda(m.meta)}</div></div>
         <div class="kpi"><div class="label">Compras Realizadas</div><div class="value">${moeda(m.realizado)}</div><div class="hint">${m.meta>0?(m.realizado/m.meta*100).toFixed(1):'0.0'}% do limite</div></div>
         <div class="kpi"><div class="label">Cancelamentos (R$)</div><div class="value">${moeda(c.total)}</div><div class="hint">${(c.itens||[]).length} itens</div></div>
         <div class="kpi"><div class="label">Trava de Compras</div><div class="value">${trav?moeda(travaCompras):'—'}</div><div class="hint">${trav?consumoPct.toFixed(1)+'% consumidos':'—'}</div></div>
-        <div class="kpi"><div class="label">Trava Total (Geral)</div><div class="value">${trav?moeda(travaTotalCalc):'—'}</div><div class="hint">somente fonte 9</div></div>
-        <div class="kpi"><div class="label">Fornecedores (Total)</div><div class="value">${trav?moeda(fornecAbs):'—'}</div><div class="hint">${trav?(sobra>=0?'Sobra: ':'Estouro: ')+moeda(Math.abs(sobra)):'—'}</div></div>
+        <div class="kpi"><div class="label">Trava Total (Fonte 9)</div><div class="value">${trav?moeda(totalGeral9):'—'}</div><div class="hint">somente fonte 9</div></div>
+        <div class="kpi"><div class="label">Fornecedores (Fonte 9)</div><div class="value">${trav?moeda(fornecedores9):'—'}</div><div class="hint">${trav?(sobra>=0?'Sobra: ':'Estouro: ')+moeda(Math.abs(sobra)):'—'}</div></div>
       </div>
       <div class="grid">
         <div class="card"><div class="title">Metas x Realizado</div><canvas id="${idOf('m')}"></canvas><div class="hint" style="margin-top:8px">${(m.meta>0?(m.realizado/m.meta*100):0)>100?pill('🚨 Estouro','bad'):pill('✅ Dentro do limite','ok')}</div></div>
@@ -191,10 +200,10 @@ async function run(){
     new Chart(ctxM,{type:'bar',data:{labels:['Meta','Realizado'],datasets:[{data:[m.meta||0,m.realizado||0]}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
     const topC=[...(c.itens||[])].sort((a,b)=>b.valor-a.valor).slice(0,10);
     new Chart(ctxC,{type:'bar',data:{labels:topC.map(i=>i.nome),datasets:[{data:topC.map(i=>i.valor)}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-    const ulC=sec.querySelector('ul[id^="lc-"]'); ulC.innerHTML=''; topC.slice(0,5).forEach(i=>{const li=document.createElement('li');li.textContent=`${i.nome} — ${moeda(i.valor)}`;ulC.appendChild(li);});
+    const ulC=sec.querySelector('ul[id^="lc-"]'); topC.slice(0,5).forEach(i=>{const li=document.createElement('li');li.textContent=`${i.nome} — ${moeda(i.valor)}`;ulC.appendChild(li);});
     const topF=[...(forSubs9||[])].sort((a,b)=>Math.abs(b.valor)-Math.abs(a.valor)).slice(0,10);
     new Chart(ctxF,{type:'bar',data:{labels:topF.map(s=>s.nome),datasets:[{data:topF.map(s=>Math.abs(s.valor||0))}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-    const ulF=sec.querySelector('ul[id^="lf-"]'); ulF.innerHTML=''; topF.forEach(s=>{const li=document.createElement('li'); li.textContent=`${s.nome} — ${moeda(s.valor)}${s.pctDaTrava?' • '+s.pctDaTrava.toFixed(1)+'%':''}`; ulF.appendChild(li);});
+    const ulF=sec.querySelector('ul[id^="lf-"]'); topF.forEach(s=>{const li=document.createElement('li'); li.textContent=`${s.nome} — ${moeda(s.valor)}`; ulF.appendChild(li);});
     const sat=satAgg[empNorm]||{Excelente:0,Bom:0,Regular:0,Ruim:0};
     new Chart(ctxS,{type:'pie',data:{labels:['Excelente','Bom','Regular','Ruim'],datasets:[{data:[sat.Excelente,sat.Bom,sat.Regular,sat.Ruim],backgroundColor:['#22c55e','#0ea5e9','#f59e0b','#ef4444']}]} ,options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
   }
