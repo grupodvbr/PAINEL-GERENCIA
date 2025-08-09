@@ -7,61 +7,42 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root{
-    --bg:#0b1220;         /* fundo escuro p/ contraste em mobile */
-    --surface:#121a2b;
-    --card:#162235;
-    --ink:#e5e7eb;
-    --muted:#94a3b8;
-    --accent:#38bdf8;
-    --danger:#ef4444;
-    --ok:#22c55e;
-    --shadow:0 6px 20px rgba(0,0,0,.35)
+    --bg:#f6f8fb; --ink:#0f172a; --muted:#64748b; --card:#fff; --primary:#0ea5e9; --shadow:0 1px 8px rgba(0,0,0,.06);
   }
   *{box-sizing:border-box}
-  html,body{height:100%}
-  body{background:linear-gradient(180deg,var(--bg),#0f172a);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;margin:0}
-  header{position:sticky;top:0;z-index:10;background:rgba(11,18,32,.85);backdrop-filter:blur(6px);color:#fff;padding:14px 18px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+  body{background:var(--bg);color:var(--ink);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;margin:0}
+  header{position:sticky;top:0;z-index:10;background:#0b1220;color:#fff;padding:14px 18px;font-weight:700;box-shadow:0 2px 12px rgba(0,0,0,.25)}
   .wrap{padding:16px;max-width:1200px;margin:0 auto}
-  .filters{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:var(--surface);border-radius:14px;padding:12px;box-shadow:var(--shadow)}
-  @media(min-width:900px){.filters{grid-template-columns:320px 220px}}
-  select,input[type="month"]{
-    width:100%;padding:12px 14px;border:1px solid #243044;background:#0f172a;color:var(--ink);
-    border-radius:10px;font-size:14px;outline:none
-  }
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;background:var(--card);border-radius:14px;padding:12px;box-shadow:var(--shadow)}
+  select,input[type="month"]{width:100%;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;background:#fff}
   .section{margin-top:14px}
-  .company>.title{font-weight:800;margin:10px 2px 12px;font-size:18px;color:#fff}
-  .kpis{display:grid;grid-template-columns:1fr;gap:10px}
-  @media(min-width:680px){.kpis{grid-template-columns:repeat(2,1fr)}}
-  .kpi{
-    background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow);
-    transition:transform .08s ease;touch-action:manipulation
-  }
-  .kpi:active{transform:scale(.99)}
-  .kpi.red{outline:1px solid rgba(239,68,68,.6);background:linear-gradient(180deg,#2a1216,#201116)}
-  .kpi .label{color:var(--muted);font-size:12px;margin-bottom:6px}
-  .kpi .value{font-size:22px;font-weight:900;letter-spacing:.2px}
-  .kpi .hint{color:var(--muted);font-size:12px;margin-top:4px}
+  .company>.title{font-weight:800;margin:10px 2px 12px}
+  /* 2 cards por linha SEMPRE (mobile e desktop) e cards mais compactos */
+  .kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .kpi{background:var(--card);border-radius:14px;padding:10px;box-shadow:var(--shadow);touch-action:manipulation}
+  .kpi.red{background:#fef2f2;color:#991b1b}
+  .kpi .label{color:var(--muted);font-size:11px;margin-bottom:4px}
+  .kpi .value{font-size:18px;font-weight:900}
+  .kpi .hint{color:var(--muted);font-size:11px;margin-top:2px}
+  /* cards e grid para conteúdo adicional */
   .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
-  @media(min-width:900px){.grid{grid-template-columns:1fr}}
-  .card{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
+  .card{background:var(--card);border-radius:14px;padding:12px;box-shadow:var(--shadow)}
   .card .title{font-weight:700;margin-bottom:8px}
-  /* Modal */
+  .list{margin:0;padding-left:18px}
+  .list li+li{margin-top:6px}
+
+  /* Modal (popup) */
   #modal{display:none;position:fixed;inset:0;z-index:1000;align-items:center;justify-content:center}
-  #modal .backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55)}
-  #modal .panel{
-    position:relative;z-index:1;width:min(94vw,680px);max-height:85vh;overflow:auto;
-    background:#0f172a;border:1px solid #263246;border-radius:14px;box-shadow:var(--shadow);padding:14px
-  }
-  #modal header{position:sticky;top:0;background:#0f172a;padding:8px 10px;margin:-14px -14px 10px;border-radius:14px 14px 0 0;box-shadow:0 2px 0 rgba(255,255,255,.03)}
+  #modal .backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+  #modal .panel{position:relative;z-index:1;width:min(94vw,680px);max-height:80vh;overflow:auto;background:#fff;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:12px}
+  #modal header{position:sticky;top:0;background:#fff;margin:-12px -12px 8px;padding:10px 12px;border-radius:12px 12px 0 0;box-shadow:0 1px 0 rgba(0,0,0,.06)}
   #modal h3{margin:0;font-size:16px}
-  #modal .close{appearance:none;border:none;background:transparent;color:#cbd5e1;font-size:20px;cursor:pointer}
-  #modal .list{margin:8px 0 0;padding:0;list-style:none}
-  #modal .item{display:flex;justify-content:space-between;gap:10px;padding:10px;border-bottom:1px dashed #22314a}
+  #modal .close{appearance:none;border:none;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:#334155}
+  #modal .list{list-style:none;margin:0;padding:0}
+  #modal .item{display:flex;justify-content:space-between;gap:12px;padding:10px;border-bottom:1px dashed #e5e7eb}
   #modal .item b{font-weight:600}
   #modal .item .val{white-space:nowrap}
-  .empty{color:#9aa8be;font-size:13px;padding:10px 4px}
-  .loading{color:#9aa8be;font-size:14px;padding:10px}
-  .muted{color:#9aa8be}
+  .empty{color:#6b7280;font-size:13px;padding:8px}
 </style>
 </head>
 <body>
@@ -101,7 +82,7 @@
 </div>
 
 <script>
-/* ======= ENDPOINT (TRAVAS) ======= */
+/* ======= ENDPOINT ======= */
 const API_BASE='https://script.google.com/macros/s/AKfycbxUf9oERSm53CpZQKkpp3mFXR3aLWc4tzSVW8DPHqsGvVt-keB_KtzAJiIgLMm9GYnB/exec';
 
 /* ======= HELPERS ======= */
@@ -111,11 +92,10 @@ const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'B
 const aliases=(obj,keys,def=0)=>{for(const k of keys){if(obj&&obj[k]!=null&&obj[k]!==''&&!isNaN(Number(obj[k])))return Number(obj[k]);}return def;};
 const idSafe=(p,k)=>`${p}-${norm(k).replace(/[^A-Z0-9]+/g,'-')}-${Math.random().toString(36).slice(2,6)}`;
 
-/* ======= FONTE 9 TOTAL: pega pronto ou calcula ======= */
+/* ======= Fonte 9 total ======= */
 function getFonte9Total(rec){
   const ready=['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'];
   for(const k of ready){ if(rec && rec[k]!=null && rec[k]!=='' && !isNaN(Number(rec[k]))) return Number(rec[k]); }
-
   if(Array.isArray(rec?.fonte9Detalhe)){
     const t=rec.fonte9Detalhe.reduce((a,i)=>a+Math.abs(Number(i.valor||i.total||0)),0);
     if(t) return t;
@@ -169,7 +149,6 @@ function extractSeries(rec){
     const forn = Number(p.fornecedores??p.fornecedoresComprado??p.valorCompradoFornecedores??p.compradoFornecedores??p.cForn??0);
     if(label) out.push({label:String(label),f9:isFinite(f9)?f9:0,forn:isFinite(forn)?forn:0});
   });
-  // tenta ordenar como data
   out.sort((a,b)=>new Date(a.label)-new Date(b.label));
   return out;
 }
@@ -197,8 +176,6 @@ const container=document.getElementById('content');
 selEmpresa.addEventListener('change', run, {passive:true});
 inpPeriodo.addEventListener('change', run, {passive:true});
 window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); }, {passive:true});
-
-// mês atual por padrão
 window.addEventListener('DOMContentLoaded', ()=>{
   const hoje=new Date();
   inpPeriodo.value = hoje.toISOString().slice(0,7); // YYYY-MM
@@ -215,8 +192,7 @@ function openModal(title, items){
   if(Array.isArray(items) && items.length){
     empty.style.display='none';
     items.forEach(d=>{
-      const li=document.createElement('li');
-      li.className='item';
+      const li=document.createElement('li'); li.className='item';
       const nome=document.createElement('b'); nome.textContent=d.nome||'—';
       const val=document.createElement('span'); val.className='val'; val.textContent=moeda(Math.abs(Number(d.valor||0)));
       li.appendChild(nome); li.appendChild(val); ul.appendChild(li);
@@ -238,15 +214,15 @@ document.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click
 async function run(){
   const empSel=selEmpresa.value;
   const periodo=inpPeriodo.value;
-  container.innerHTML='<div class="loading">Carregando…</div>';
+  container.innerHTML='<div style="padding:10px;color:#64748b">Carregando…</div>';
 
   const empresas = empSel==='TODAS AS EMPRESAS' ? EMPRESAS : [empSel];
-  const parts=[];
+  const blocks=[];
 
   for(const emp of empresas){
     try{
       const rec=await fetchTravasPorEmpresa(emp, periodo);
-      if(!rec){ parts.push(renderErro(emp,'Sem dados.')); continue; }
+      if(!rec){ blocks.push(renderErro(emp,'Sem dados.')); continue; }
 
       const travaTotal=aliases(rec,['travaTotal','trava_total','E2','travaTotalE2'],0);          // E2
       const fornecLim=aliases(rec,['travaCompras','trava_compras','fornecedoresTotal','D2'],0);  // D2
@@ -260,15 +236,16 @@ async function run(){
       const det=[...detRaw].map(d=>({nome:d.nome??d.planocontas??d.categoria??'—',valor:Number(d.valor??d.total??0)}))
                            .sort((a,b)=>Math.abs(b.valor)-Math.abs(a.valor));
 
+      // série temporal: só quando 1 empresa selecionada
       const serie = (empSel==='TODAS AS EMPRESAS') ? [] : extractSeries(rec);
 
-      parts.push(renderEmpresa(emp,{travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det,serie}));
+      blocks.push(renderEmpresa(emp,{travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det,serie,showChart: empSel!=='TODAS AS EMPRESAS'}));
     }catch(e){
-      parts.push(renderErro(emp, e.message||String(e)));
+      blocks.push(renderErro(emp, e.message||String(e)));
     }
   }
 
-  container.innerHTML=parts.join('');
+  container.innerHTML=blocks.join('');
 }
 
 /* ======= Templates ======= */
@@ -280,15 +257,20 @@ function renderErro(emp,msg){
 }
 
 function renderEmpresa(emp, d){
-  const {travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det,serie}=d;
+  const {travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det,serie,showChart}=d;
   const cardForId=idSafe('cardFor', emp);
   const chartId=idSafe('chart','evolucao');
 
-  const chartBlock=(Array.isArray(serie)&&serie.length>0)?`
+  // bloco do gráfico (apenas empresa selecionada) + lista de despesas mais caras
+  const chartBlock = (showChart && Array.isArray(serie) && serie.length>0) ? `
     <div class="card">
       <div class="title">Evolução do Mês</div>
-      <canvas id="${chartId}" height="180"></canvas>
-    </div>`:'';
+      <canvas id="${chartId}" height="170"></canvas>
+      <div class="title" style="margin-top:12px">Despesas mais caras (Top 10)</div>
+      <ul class="list">
+        ${det.slice(0,10).map(i=>`<li>${i.nome} — <b>${moeda(Math.abs(i.valor||0))}</b></li>`).join('')}
+      </ul>
+    </div>` : '';
 
   const html=`
   <section class="company">
@@ -323,27 +305,28 @@ function renderEmpresa(emp, d){
 
   // liga eventos e gráfico
   queueMicrotask(()=>{
+    // abrir popup SEMPRE, inclusive em "TODAS AS EMPRESAS"
     const el=document.getElementById(cardForId);
     if(el){
       const open = ()=>openModal(`Detalhamento Fornecedores — ${emp}`, det);
       el.addEventListener('click', open, {passive:true});
       el.addEventListener('touchend', open, {passive:true});
     }
-    if(chartBlock){
-      const ctx=document.getElementById(chartId)?.getContext('2d');
-      if(ctx){
-        const labels=serie.map(p=>p.label);
-        const f9=serie.map(p=>p.f9||0);
-        const forn=serie.map(p=>p.forn||0);
-        new Chart(ctx,{
-          type:'line',
-          data:{labels,datasets:[
-            {label:'Fonte 9 (Total Comprado)',data:f9,tension:.25},
-            {label:'Fornecedores (C2→C19)',data:forn,tension:.25}
-          ]},
-          options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true}}}
-        });
-      }
+
+    // gráfico de linhas (apenas quando showChart)
+    if(showChart && document.getElementById(chartId) && Array.isArray(serie) && serie.length>0){
+      const ctx=document.getElementById(chartId).getContext('2d');
+      const labels=serie.map(p=>p.label);
+      const f9=serie.map(p=>p.f9||0);
+      const forn=serie.map(p=>p.forn||0);
+      new Chart(ctx,{
+        type:'line',
+        data:{labels,datasets:[
+          {label:'Fonte 9 (Total Comprado)',data:f9,tension:.25},
+          {label:'Fornecedores (C2→C19)',data:forn,tension:.25}
+        ]},
+        options:{responsive:true,plugins:{legend:{position:'bottom'}},scales:{y:{beginAtZero:true}}}
+      });
     }
   });
 
