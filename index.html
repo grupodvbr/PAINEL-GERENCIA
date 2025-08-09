@@ -70,33 +70,33 @@
 </div>
 
 <script>
-// ======= CONFIG =======
+/* ========= CONFIG ========= */
 const API_BASE = 'https://script.google.com/macros/s/AKfycbxUf9oERSm53CpZQKkpp3mFXR3aLWc4tzSVW8DPHqsGvVt-keB_KtzAJiIgLMm9GYnB/exec';
 const EMPRESAS=['MERCATTO DELICIA','DELICIA GOURMET','VILLA GOURMET','M. KIDS','PADARIA DELICIA'];
 const USER_EMP_MAP={'LUCAS':'MERCATTO DELICIA','MARIA':'DELICIA GOURMET','JOAO':'VILLA GOURMET','PATRICIA':'M. KIDS','CARLOS':'PADARIA DELICIA','FERNANDA':'MERCATTO DELICIA','BRUNO':'DELICIA GOURMET','ANA':'VILLA GOURMET','ROBERTO':'PADARIA DELICIA'};
 
-// ======= HELPERS =======
+/* ========= HELPERS ========= */
 const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
 const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const aliases=(obj,keys,def=0)=>{for(const k of keys){if(obj&&obj[k]!=null&&obj[k]!=='' ) return Number(obj[k]);}return def;};
 const idSafe=(p,k)=>`${p}-${norm(k).replace(/[^A-Z0-9]+/g,'-')}-${Math.random().toString(36).slice(2,6)}`;
 
-// ======= API (suporta resposta por empresa OU consolidada) =======
-async function fetchTravas(periodo){
-  const qs = periodo?`?periodo=${encodeURIComponent(periodo)}`:'';
+/* ========= API: busca por EMPRESA (obrigatório) ========= */
+async function fetchTravasPorEmpresa(empresa, periodo){
+  const qs = `?empresa=${encodeURIComponent(empresa)}${periodo?`&periodo=${encodeURIComponent(periodo)}`:''}`;
   const res = await fetch(API_BASE + qs);
-  const json = await res.json();
-  // formatos aceitos:
-  // {ok:true, data:[{empresa,...}, ...]}
-  // [{empresa,...}, ...]
-  // {empresa:..., ...}  (único)
-  if (Array.isArray(json)) return json;
-  if (Array.isArray(json?.data)) return json.data;
-  if (json?.empresa) return [json];
-  return [];
+  let json;
+  try{ json = await res.json(); }catch(e){ throw new Error('Resposta não é JSON'); }
+  if(json?.ok===false){ throw new Error(json.error || 'Erro do endpoint'); }
+  // Formatos aceitos:
+  // {empresa:..., ...}  |  {data:[{empresa:...}]}  |  [{empresa:...}]
+  if (json?.empresa) return json;
+  if (Array.isArray(json?.data)) return json.data.find(r=>norm(r.empresa||r.Empresa)===norm(empresa)) || json.data[0];
+  if (Array.isArray(json)) return json.find(r=>norm(r.empresa||r.Empresa)===norm(empresa)) || json[0];
+  return null;
 }
 
-// ======= UI =======
+/* ========= UI eventos ========= */
 document.getElementById('btn').addEventListener('click',()=>{
   const usuarioSel=document.getElementById('usuario').value;
   const empAuto=USER_EMP_MAP[norm(usuarioSel)] || 'TODAS AS EMPRESAS';
@@ -104,54 +104,57 @@ document.getElementById('btn').addEventListener('click',()=>{
   run();
 });
 
-window.addEventListener('DOMContentLoaded', () => {
-  // Se vier ?usuario=... na URL
-  const params=new URLSearchParams(location.search);
-  const usuario=params.get('usuario');
-  if(usuario){
-    document.getElementById('usuario').value=decodeURIComponent(usuario);
-    const empAuto=USER_EMP_MAP[norm(usuario)] || 'TODAS AS EMPRESAS';
-    document.getElementById('empresa').value=empAuto;
-  }
-  run();
-});
+window.addEventListener('DOMContentLoaded', () => run());
 
-// ======= RENDER =======
+/* ========= Render ========= */
 async function run(){
   const empSel=document.getElementById('empresa').value;
   const periodo=document.getElementById('periodo').value;
-  const all = await fetchTravas(periodo);
-
-  // Index por empresa
-  const byEmp = {};
-  for(const r of all){
-    const key = norm(r.empresa || r.Empresa || r.nome || '');
-    if(!key) continue;
-    byEmp[key]=r;
-  }
+  const container=document.getElementById('content'); 
+  container.innerHTML='<div style="padding:12px;color:#64748b">Carregando…</div>';
 
   const empresas = empSel==='TODAS AS EMPRESAS' ? EMPRESAS : [empSel];
-  const container=document.getElementById('content'); container.innerHTML='';
-
+  const sections=[];
   for(const emp of empresas){
-    const rec = byEmp[norm(emp)];
-    if(!rec) continue;
+    try{
+      const rec = await fetchTravasPorEmpresa(emp, periodo);
+      if(!rec){ 
+        sections.push(renderErro(emp,'Sem dados para esta empresa.')); 
+        continue; 
+      }
+      sections.push(renderEmpresa(emp, rec));
+    }catch(err){
+      console.error('Erro ao carregar', emp, err);
+      sections.push(renderErro(emp, String(err.message||err)));
+    }
+  }
+  container.innerHTML = sections.join('');
+}
 
-    // Aliases de campos (flexível):
-    const travaTotal = aliases(rec, ['travaTotal','trava_total','E2','travaTotalE2'], 0);             // E2
-    const fornecLim  = aliases(rec, ['travaCompras','trava_compras','fornecedoresTotal','D2'], 0);    // D2
-    const fonte9Tot  = aliases(rec, ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'], 0);
-    const fornComp   = aliases(rec, ['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'], 0);
+/* ========= Render Helpers ========= */
+function renderErro(emp, msg){
+  return `<section class="company">
+    <div class="title">${emp}</div>
+    <div style="background:#fff3f3;color:#991b1b;border-radius:12px;padding:12px;box-shadow:0 1px 8px rgba(0,0,0,.06)">
+      Erro: ${msg}
+    </div>
+  </section>`;
+}
 
-    const pctTotal = travaTotal>0 ? (fonte9Tot/travaTotal*100) : 0;
-    const pctFor   = fornecLim>0  ? (fornComp/fornecLim*100)   : 0;
+function renderEmpresa(emp, rec){
+  // Aliases de campos do endpoint
+  const travaTotal = aliases(rec, ['travaTotal','trava_total','E2','travaTotalE2'], 0);             // E2
+  const fornecLim  = aliases(rec, ['travaCompras','trava_compras','fornecedoresTotal','D2'], 0);    // D2
+  const fonte9Tot  = aliases(rec, ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'], 0);
+  const fornComp   = aliases(rec, ['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'], 0);
+  const pctTotal = travaTotal>0 ? (fonte9Tot/travaTotal*100) : 0;
+  const pctFor   = fornecLim>0  ? (fornComp/fornecLim*100)   : 0;
+  const det = rec.fornecedoresDetalhe || rec.detalhesFornecedores || rec.detalhamento || [];
 
-    const det = rec.fornecedoresDetalhe || rec.detalhesFornecedores || rec.detalhamento || [];
+  const cardForId=idSafe('cardFor', emp);
 
-    const sec=document.createElement('section'); sec.className='company';
-    const cardForId=idSafe('cardFor', emp);
-
-    sec.innerHTML=`
+  const html = `
+    <section class="company">
       <div class="title">${emp}</div>
 
       <div class="kpis">
@@ -177,25 +180,31 @@ async function run(){
           <div class="hint">${pctFor.toFixed(1)}%</div>
         </div>
       </div>
-    `;
-    container.appendChild(sec);
+    </section>
+  `;
 
-    // Modal de detalhamento
-    document.getElementById(cardForId).addEventListener('click',()=>{
+  // vincula evento depois que inserir no DOM
+  queueMicrotask(()=>{
+    const el=document.getElementById(cardForId);
+    if(!el) return;
+    el.addEventListener('click',()=>{
       const title=document.getElementById('modal-title');
       title.textContent=`Detalhamento Fornecedores — ${emp}`;
-      const list=document.getElementById('modal-list'); list.innerHTML='';
-      det.forEach(d=>{
+      const ul=document.getElementById('modal-list'); ul.innerHTML='';
+      (det||[]).forEach(d=>{
         const nome = d.nome ?? d.planocontas ?? d.categoria ?? '—';
         const val  = Number(d.valor ?? d.total ?? 0);
         const li=document.createElement('li');
         li.textContent = `${nome} — ${moeda(Math.abs(val))}`;
-        list.appendChild(li);
+        ul.appendChild(li);
       });
       document.getElementById('modal').style.display='flex';
     });
-  }
+  });
+
+  return html;
 }
 </script>
+
 </body>
 </html>
