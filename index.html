@@ -23,12 +23,6 @@
   .kpi .label{color:var(--muted);font-size:12px;margin-bottom:4px}
   .kpi .value{font-size:22px;font-weight:900}
   .kpi .hint{color:var(--muted);font-size:12px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:12px}
-  .card{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
-  .card .title{font-weight:700;margin-bottom:8px}
-  .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px}
-  .ok{background:#ecfdf5;color:#065f46}.warn{background:#fffbeb;color:#92400e}.bad{background:#fef2f2;color:#991b1b}
-  ul{margin:8px 0 0;padding-left:18px} li+li{margin-top:6px}
   /* Modal */
   #modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:1000}
   #modal .box{background:#fff;padding:20px;border-radius:12px;max-width:560px;width:92%;max-height:80%;overflow:auto}
@@ -76,9 +70,6 @@
 
 <script>
 // ---------- ENDPOINTS ----------
-const URL_METAS  = 'https://script.google.com/macros/s/AKfycbziCPWWJxxfrnSeT3RHsNbw21z9MfnnB8JpV7ZQcZnvUQQ7dL3lVJdpUG7epACVjFaO/exec';
-const URL_CANCEL = 'https://script.google.com/macros/s/AKfycbzM1mmixFkFE5tbC-0Evc6GVyZEJkh88HCikNK08FujRwCrgUA1e_E29nMHip81kRPoSg/exec';
-const URL_SAT    = 'https://script.google.com/macros/s/AKfycbyK3A5CDn_EgA3pbRVToh87_qKWvbIry886OkR1AdkJi7RyvSgcwY0BmRqhbKQnEKwgrA/exec';
 const URL_TRAVAS = 'https://script.google.com/macros/s/AKfycbzkj-mfUUqwetIY5JKj0zPpTftzgVqCDFJLu45PlznBAGF4xm97EHnZQwqYUfhsS_1lFA/exec';
 
 // ---------- HELPERS ----------
@@ -86,99 +77,96 @@ const EMPRESAS=['MERCATTO DELICIA','DELICIA GOURMET','VILLA GOURMET','M. KIDS','
 const USER_EMP_MAP={'LUCAS':'MERCATTO DELICIA','MARIA':'DELICIA GOURMET','JOAO':'VILLA GOURMET','PATRICIA':'M. KIDS','CARLOS':'PADARIA DELICIA','FERNANDA':'MERCATTO DELICIA','BRUNO':'DELICIA GOURMET','ANA':'VILLA GOURMET','ROBERTO':'PADARIA DELICIA'};
 const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
 const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const toNum=v=>{
+  if(v==null) return 0;
+  const s=String(v).replace(/\s/g,'').replace(/[R$\u00A0]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.');
+  const n=parseFloat(s); return isNaN(n)?0:n;
+};
+const first = (...vals)=>vals.find(v=>v!==undefined&&v!==null&&v!=='');
 const idSafe = (prefix, key) => `${prefix}-${norm(key).replace(/[^A-Z0-9]+/g,'-')}-${Math.random().toString(36).slice(2,6)}`;
 
-// ---------- CALCULOS FONTE 9 ----------
-function somasPorFonte9(t){
-  const categorias=Array.isArray(t?.categorias)?t.categorias:[];
+// ---------- CÁLCULOS (FONTE 9 + BLOCO FORNECEDORES) ----------
+function calcFonte9(trav){
+  const categorias=Array.isArray(trav?.categorias)?trav.categorias:[];
   const isFont9=s=>Number(s.font)===9 || s.isSub===true || s.font==null;
 
-  // Total geral (fonte 9 em todas as categorias/subcategorias)
-  const totalGeral9 = categorias
-    .flatMap(c=>c.subs||[])
-    .filter(isFont9)
-    .reduce((a,s)=>a+Math.abs(Number(s.valor||0)),0);
+  // Total fonte 9 (tudo)
+  const totalGeral9 = categorias.flatMap(c=>c.subs||[]).filter(isFont9)
+    .reduce((a,s)=>a+Math.abs(toNum(s.valor)),0);
 
-  // Fornecedores: pegar categoria "Fornecedores" e somar SUBS até "Frete" (inclusive)
+  // Bloco fornecedores: sublinhas de "Fornecedores" até ANTES de "Frete"
   const catFor = categorias.find(c=>norm(c.nome).includes('FORNECEDOR'));
-  let fornecedoresSubs = [];
+  let fornecedoresSubs=[];
   if (catFor && Array.isArray(catFor.subs)) {
     const subs = catFor.subs;
-    let end = subs.findIndex(s => norm(s.nome).includes('FRETE'));
-    if (end === -1) end = subs.length - 1; // se não achar "Frete", pega todos
-    fornecedoresSubs = subs.slice(0, end + 1).filter(isFont9);
+    let endIdx = subs.findIndex(s=>/^\s*frete/i.test(s.nome||''));
+    if(endIdx===-1) endIdx = 19-1; // fallback: 1C..19C → 19 itens
+    fornecedoresSubs = subs.slice(0, endIdx).filter(isFont9);
   }
-  const fornecedoresTotal = fornecedoresSubs.reduce((a,s)=>a+Math.abs(Number(s.valor||0)),0);
+  const fornecedoresTotal = fornecedoresSubs.reduce((a,s)=>a+Math.abs(toNum(s.valor)),0);
 
   return { totalGeral9, fornecedoresTotal, fornecedoresSubs };
 }
 
-// ---------- EVENTOS ----------
+// ---------- UI ----------
 document.getElementById('btn').addEventListener('click',()=>{
   const usuarioSel=document.getElementById('usuario').value;
   const empAuto=USER_EMP_MAP[norm(usuarioSel)] || 'TODAS AS EMPRESAS';
   document.getElementById('empresa').value=empAuto;
   run();
 });
-window.addEventListener('DOMContentLoaded', () => {
-  const params=new URLSearchParams(location.search);
-  const usuario=params.get('usuario');
-  if(usuario){
-    document.getElementById('usuario').value=decodeURIComponent(usuario);
-    const empAuto=USER_EMP_MAP[norm(usuario)] || 'TODAS AS EMPRESAS';
-    document.getElementById('empresa').value=empAuto;
-  }
-  run();
-});
+
+window.addEventListener('DOMContentLoaded', ()=> run());
 
 // ---------- EXECUÇÃO ----------
 async function run(){
   const empSel=document.getElementById('empresa').value;
   const periodo=document.getElementById('periodo').value;
   const qs=periodo?`?periodo=${encodeURIComponent(periodo)}`:'';
-
   const empresas = empSel==='TODAS AS EMPRESAS' ? EMPRESAS : [empSel];
   const container=document.getElementById('content'); container.innerHTML='';
 
   for(const emp of empresas){
-    // TRAVAS
     const travas=await fetch(URL_TRAVAS+(qs+(qs?'&':'?')+'empresa='+encodeURIComponent(emp))).then(r=>r.json()).catch(()=>[]);
     const trav = Array.isArray(travas) ? (travas.find(x=>norm(x.empresa)===norm(emp)) || travas[0]) : null;
-    if(!trav){ continue; }
+    if(!trav) continue;
 
-    const { totalGeral9, fornecedoresTotal, fornecedoresSubs } = somasPorFonte9(trav);
-    const travaTotal = Number(trav.travaTotal||0);
-    const travaCompras = Number(trav.travaCompras||0);
+    // Pegar E2 (Trava Total) e D2 (Trava de Compras / Fornecedores Total)
+    const travaTotal = toNum(first(trav.travaTotal, trav.trava_total, trav.E2, trav['linha2E'], trav?.linhas?.[2]?.E, trav?.cabecalho?.travaTotal));
+    const fornecedoresLimite = toNum(first(trav.travaCompras, trav.trava_compras, trav.D2, trav['linha2D'], trav?.linhas?.[2]?.D, trav?.cabecalho?.travaCompras));
+
+    // Cálculos de fonte 9
+    const { totalGeral9, fornecedoresTotal, fornecedoresSubs } = calcFonte9(trav);
 
     const pctTotal = travaTotal>0 ? (totalGeral9/travaTotal*100) : 0;
-    const pctFor   = travaCompras>0 ? (fornecedoresTotal/travaCompras*100) : 0;
+    const pctFor   = fornecedoresLimite>0 ? (fornecedoresTotal/fornecedoresLimite*100) : 0;
 
     const sec=document.createElement('section'); sec.className='company';
     const cardForId = idSafe('cardFor', emp);
     sec.innerHTML=`
       <div class="title">${emp}</div>
 
-      <!-- Linha 1 -->
+      <!-- LINHA 1 -->
       <div class="kpis">
         <div class="kpi">
-          <div class="label">Trava Total</div>
+          <div class="label">Trava Total (E2)</div>
           <div class="value">${moeda(travaTotal)}</div>
         </div>
         <div class="kpi ${pctTotal>=80?'red':''}">
-          <div class="label">Valor Total Comprado</div>
+          <div class="label">Valor Total Comprado (Fonte 9)</div>
           <div class="value">${moeda(totalGeral9)}</div>
           <div class="hint">${pctTotal.toFixed(1)}%</div>
         </div>
       </div>
 
-      <!-- Linha 2 -->
+      <!-- LINHA 2 -->
       <div class="kpis">
         <div class="kpi">
-          <div class="label">Fornecedores Total</div>
-          <div class="value">${moeda(travaCompras)}</div>
+          <div class="label">Fornecedores Total (D2)</div>
+          <div class="value">${moeda(fornecedoresLimite)}</div>
         </div>
         <div class="kpi ${pctFor>=80?'red':''}" id="${cardForId}" style="cursor:pointer">
-          <div class="label">Valor Já Comprado (Fornecedores)</div>
+          <div class="label">Valor Já Comprado (Fornecedores · C1→C19)</div>
           <div class="value">${moeda(fornecedoresTotal)}</div>
           <div class="hint">${pctFor.toFixed(1)}%</div>
         </div>
@@ -186,16 +174,20 @@ async function run(){
     `;
     container.appendChild(sec);
 
-    // Modal de detalhamento (clique no card de fornecedores)
+    // Modal de detalhamento
     document.getElementById(cardForId).addEventListener('click',()=>{
       const list=document.getElementById('modal-list'); list.innerHTML='';
       fornecedoresSubs.forEach(s=>{
         const li=document.createElement('li');
-        li.textContent=`${s.nome} — ${moeda(Math.abs(Number(s.valor||0)))}`;
+        li.textContent=`${s.nome} — ${moeda(Math.abs(toNum(s.valor)))}`;
         list.appendChild(li);
       });
       document.getElementById('modal').style.display='flex';
     });
+
+    // DEBUG opcional (abra o console do navegador)
+    console.debug('TRAVAS RAW', {emp, trav});
+    console.debug('E2 (Trava Total) =>', travaTotal, ' | D2 (Fornec Total) =>', fornecedoresLimite);
   }
 }
 </script>
