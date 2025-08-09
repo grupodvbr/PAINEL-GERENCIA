@@ -31,6 +31,8 @@
   .progress{height:6px;background:#e5e7eb;border-radius:999px;margin-top:8px;overflow:hidden}
   .progress>span{display:block;height:100%;background:var(--primary);width:0;border-radius:999px;transition:width .2s}
 
+  .note{color:#6b7280;font-size:12px;margin-top:6px}
+
   .btn-link{position:absolute;top:6px;right:8px;font-size:11px;border:1px solid #bae6fd;background:#e0f2fe;color:#0369a1;padding:4px 8px;border-radius:999px;cursor:pointer}
   .btn-link:hover{filter:brightness(.97)}
 
@@ -96,13 +98,16 @@
 </div>
 
 <script>
-const API_BASE='https://script.google.com/macros/s/AKfycbxrgK5j60i_WIzPRzF0PS458hNzcudrqJOr0xSq0UKxe-FN0yzJOlJQSYJIM5Ah_5egEA/exec';
+/* ======= CONFIG ======= */
+const API_BASE='https://script.google.com/macros/s/AKfycbxrgK5j60i_WIzPRzF0PS458hNzcudrqJOr0xSq0UKxe-FN0yzJOlJQSYJIM5Ah_5egEA/exec'; // <<< troque pelo seu URL do Apps Script
 const EMPRESAS=['MERCATTO DELICIA','DELICIA GOURMET','VILLA GOURMET','M. KIDS','PADARIA DELICIA'];
+
+/* ======= HELPERS ======= */
 const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
 const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const aliases=(o,keys,def=0)=>{for(const k of keys){const v=o?.[k];if(v!==undefined&&v!==''&&!isNaN(Number(v)))return Number(v);}return def;};
 
-/* Cache (5 min) */
+/* Cache simples (5 min) */
 const TTL=5*60*1000, CK=(e,p)=>`travas:${e}|${p}`;
 const getC=(e,p)=>{try{const r=sessionStorage.getItem(CK(e,p));if(!r)return null;const o=JSON.parse(r);return (Date.now()-o.t<TTL)?o.v:null}catch{return null}};
 const setC=(e,p,v)=>{try{sessionStorage.setItem(CK(e,p),JSON.stringify({t:Date.now(),v}))}catch{}};
@@ -122,7 +127,7 @@ function progressCalc(limit, spent, perStr){
   return {pct,available,forecast,forecastPct,status};
 }
 
-/* Fonte 9 total */
+/* Fonte 9 — total */
 function fonte9Total(rec){
   const keys=['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'];
   for(const k of keys){const v=rec?.[k]; if(v!==undefined&&v!==''&&!isNaN(Number(v))) return Number(v);}
@@ -133,13 +138,13 @@ function fonte9Total(rec){
   return 0;
 }
 
-/* ------- Planos (PRIORIDADE: planosFonte9 da API) ------- */
+/* Planos (PRIORIDADE: planosFonte9 da API) */
 function extractPlanos(rec){
   if (Array.isArray(rec?.planosFonte9) && rec.planosFonte9.length) {
     return rec.planosFonte9.map(p=>({nome:String(p.nome??'—'),valor:Math.abs(Number(p.valor??0))}));
   }
-  // fallbacks (se precisar)
-  const PLAN_NAME_COLS=[1,6,11,16,21]; // B,G,L,Q,V (zero-based)
+  // Fallbacks se necessário:
+  const PLAN_NAME_COLS=[1,6,11,16,21]; // B,G,L,Q,V (zero-based no grid)
   const planosFromGrid = (grid=>{
     if(!Array.isArray(grid)||!Array.isArray(grid[0])) return [];
     const map=new Map();
@@ -188,15 +193,8 @@ const inpPeriodo=document.getElementById('periodo');
 const container=document.getElementById('content');
 let ChartLib=null;
 
-selEmpresa.addEventListener('change', run);
-inpPeriodo.addEventListener('change', run);
-window.addEventListener('DOMContentLoaded', ()=>{
-  const hoje=new Date();
-  inpPeriodo.value=hoje.toISOString().slice(0,7); // mês atual no filtro superior
-  run();
-});
-
-/* Modal */
+/* Modal: open/close com delegação */
+function closeModal(){const m=document.getElementById('modal');m.style.display='none';m.setAttribute('aria-hidden','true');}
 function openModal(title, items){
   const modal=document.getElementById('modal'); document.getElementById('modal-title').textContent=title||'Detalhes';
   const ul=document.getElementById('modal-list'); const empty=document.getElementById('modal-empty'); ul.innerHTML='';
@@ -210,7 +208,16 @@ function openModal(title, items){
   }else empty.style.display='block';
   modal.style.display='flex'; modal.setAttribute('aria-hidden','false');
 }
-document.querySelectorAll('[data-close], #modal .backdrop]').forEach(el=>el.addEventListener('click',()=>{const m=document.getElementById('modal');m.style.display='none';m.setAttribute('aria-hidden','true');}));
+document.addEventListener('click',(e)=>{ if(e.target.matches('[data-close], #modal .backdrop')) closeModal(); });
+document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeModal(); });
+
+selEmpresa.addEventListener('change', run);
+inpPeriodo.addEventListener('change', run);
+window.addEventListener('DOMContentLoaded', ()=>{
+  const hoje=new Date();
+  inpPeriodo.value=hoje.toISOString().slice(0,7); // mês atual
+  run();
+});
 
 /* Render principal */
 async function run(){
@@ -221,13 +228,17 @@ async function run(){
   for(const emp of empresas){
     try{
       const rec=await getEmpresaPeriodo(emp, periodo);
-      const travaTotal=aliases(rec,['travaTotal','trava_total','E2','travaTotalE2'],0);
-      const fornecLim=aliases(rec,['travaCompras','trava_compras','fornecedoresTotal','D2'],0);
-      const fonte9=fonte9Total(rec);
-      const fornComp=aliases(rec,['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'],0);
+      const periodOk = rec?.matchesPeriod !== false; // respeita data vinda da planilha
+
+      // KPIs
+      const travaTotal= periodOk ? aliases(rec,['travaTotal','trava_total','E2','travaTotalE2'],0) : 0;
+      const fornecLim = periodOk ? aliases(rec,['travaCompras','trava_compras','fornecedoresTotal','D2'],0) : 0;
+      const fonte9    = periodOk ? fonte9Total(rec) : 0;
+      const fornComp  = periodOk ? aliases(rec,['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'],0) : 0;
+      const planos    = periodOk ? extractPlanos(rec) : [];
+
       const gTotal=progressCalc(travaTotal, fonte9, periodo);
       const gForn =progressCalc(fornecLim,  fornComp, periodo);
-      const planos=extractPlanos(rec);
 
       const sec=document.createElement('section'); sec.className='company';
       sec.innerHTML = `
@@ -241,6 +252,7 @@ async function run(){
               Disponível: <b>${moeda(gTotal.available)}</b>
             </div>
             <div class="progress"><span style="width:${Math.min(gTotal.pct,100)}%"></span></div>
+            ${!periodOk?`<div class="note">Sem dados para ${periodo}. Última data na planilha: ${rec?.dataRef||'—'}.</div>`:''}
           </div>
 
           <div class="kpi ${gForn.status==='bad'?'bad':gForn.status==='warn'?'warn':(gForn.status==='good'?'good':'')}">
@@ -253,13 +265,14 @@ async function run(){
               Previsão fim do mês: <b>${moeda(gForn.forecast)}</b> (${gForn.forecastPct.toFixed(1)}%)
             </div>
             <div class="progress"><span style="width:${Math.min(gForn.pct,100)}%"></span></div>
+            ${!periodOk?`<div class="note">Sem dados para ${periodo}. Última data na planilha: ${rec?.dataRef||'—'}.</div>`:''}
           </div>
         </div>
       `;
       container.appendChild(sec);
       sec.querySelector('[data-ver-planos]').addEventListener('click',()=>openModal(`Detalhamento Fornecedores — ${emp}`, planos));
 
-      // gráfico apenas quando 1 empresa
+      // gráfico apenas quando 1 empresa selecionada
       if(empSel!=='TODAS AS EMPRESAS'){
         const chartWrap=document.createElement('div'); chartWrap.className='grid';
         chartWrap.innerHTML=renderChartBlock(emp);
@@ -300,7 +313,7 @@ function renderChartBlock(emp){
 /* Range de meses */
 function monthRange(from,to){let a=parseYYYYMM(from),b=parseYYYYMM(to);if(!a||!b)return[];if(a>b){const t=a;a=b;b=t;}const out=[],c=new Date(a);while(c<=b){out.push(`${c.getFullYear()}-${String(c.getMonth()+1).padStart(2,'0')}`);c.setMonth(c.getMonth()+1);}return out}
 
-/* Séries (usa o valor do ÚLTIMO registro do mês — o que a API devolve para o mês) */
+/* Séries (considera somente o valor do ÚLTIMO dia do mês: se matchesPeriod=false, usa 0) */
 async function buildSeries(emp, from, to){
   const months=monthRange(from,to), labels=[...months];
   const total=new Array(months.length).fill(0);
@@ -309,14 +322,15 @@ async function buildSeries(emp, from, to){
   for(let i=0;i<months.length;i++){
     const per=months[i];
     const rec=await getEmpresaPeriodo(emp, per);
-    total[i]=fonte9Total(rec);
+    const periodOk = rec?.matchesPeriod !== false;
 
-    const planos=extractPlanos(rec); // planos desse mês (valor do último dia registrado)
+    total[i]= periodOk ? fonte9Total(rec) : 0;
+
+    const planos= periodOk ? extractPlanos(rec) : [];
     planos.forEach(p=>{
       plansSet.add(p.nome);
       if(!planMap[p.nome]) planMap[p.nome]=new Array(months.length).fill(0);
-      // usamos o valor do mês (não somar!), então atribuimos:
-      planMap[p.nome][i]=Math.abs(Number(p.valor||0));
+      planMap[p.nome][i]=Math.abs(Number(p.valor||0)); // valor do mês (sem acumular)
     });
   }
   return {labels,total,planMap,plans:[...plansSet].sort()};
