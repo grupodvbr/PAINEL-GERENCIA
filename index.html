@@ -1,235 +1,219 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Painel de Gestão - CB Systems</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>CB Systems • Painel do Gestor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      margin: 0;
-      background: #f4f6f9;
-    }
-
-    header {
-      background-color: #2c3e50;
-      color: white;
-      text-align: center;
-      padding: 20px;
-      font-size: 22px;
-      font-weight: bold;
-    }
-
-    .logo {
-      text-align: center;
-      margin: 30px 0 10px;
-    }
-
-    .logo img {
-      width: 150px;
-      animation: pulse 1.5s infinite;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.05); opacity: 0.9; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-
-    .login-box {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-
-    .login-box select, .login-box button {
-      padding: 10px;
-      margin: 10px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      font-size: 16px;
-    }
-
-    .container {
-      display: none;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
-      padding: 20px;
-    }
-
-    .card {
-      background: white;
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-
-    .title {
-      font-size: 18px;
-      font-weight: bold;
-      margin-bottom: 10px;
-    }
-
-    .value {
-      font-size: 24px;
-      color: #2c3e50;
-    }
-
-    canvas {
-      max-width: 100%;
-    }
-
-    ul {
-      padding-left: 20px;
-    }
+    :root{--bg:#f6f8fb;--ink:#0f172a;--muted:#64748b;--card:#fff;--primary:#0ea5e9;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+    header{position:sticky;top:0;z-index:20;background:#0b1220;color:#fff;padding:16px 20px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.2)}
+    .wrap{padding:18px}
+    .login{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;background:var(--card);border-radius:14px;padding:12px 12px;box-shadow:0 1px 6px rgba(0,0,0,.08);margin-bottom:14px}
+    select,button,input[type="month"]{padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px}
+    button{background:var(--primary);color:#fff;border:none;cursor:pointer}
+    button:hover{filter:brightness(.95)}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+    .card{background:var(--card);border-radius:14px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:14px}
+    .title{font-weight:700;margin-bottom:6px;color:#0b1220}
+    .muted{color:var(--muted);font-size:12px}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+    .kpi{background:#fff;border-radius:12px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .value{font-size:22px;font-weight:800}
+    .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px}
+    .pill.ok{background:#ecfdf5;color:#065f46}
+    .pill.warn{background:#fffbeb;color:#92400e}
+    .pill.bad{background:#fef2f2;color:#991b1b}
+    ul{margin:0;padding-left:18px}
+    li+li{margin-top:6px}
   </style>
 </head>
 <body>
-
-  <header>CB Systems | Painel do Gestor</header>
-
-  <div class="logo">
-    <img src="https://static.wixstatic.com/media/d830b0_8cec50a98bbf4775814dbfa5386585e8~mv2.png" alt="Logo CB Systems">
+<header>CB Systems • Painel do Gestor</header>
+<div class="wrap">
+  <div class="login">
+    <label class="muted">Empresa
+      <select id="empresa">
+        <option value="">Selecione...</option>
+        <option>MERCATTO DELICIA</option>
+        <option>DELICIA GOURMET</option>
+        <option>VILLA GOURMET</option>
+        <option>M. KIDS</option>
+        <option>PADARIA DELICIA</option>
+      </select>
+    </label>
+    <label class="muted">Usuário
+      <select id="usuario"><option value="">Selecionar...</option></select>
+    </label>
+    <label class="muted">Período
+      <input id="periodo" type="month" />
+    </label>
+    <div style="display:flex;align-items:end"><button id="btnEntrar">Entrar</button></div>
   </div>
 
-  <div class="login-box">
-    <label for="empresa">Empresa:</label>
-    <select id="empresa">
-      <option value="">Selecione...</option>
-      <option>MERCATTO DELICIA</option>
-      <option>DELICIA GOURMET</option>
-      <option>VILLA GOURMET</option>
-      <option>M. KIDS</option>
-      <option>PADARIA DELICIA</option>
-    </select>
-
-    <label for="usuario">Usuário:</label>
-    <select id="usuario">
-      <option value="">Selecionar...</option>
-    </select>
-
-    <button onclick="filtrarPainel()">Entrar</button>
-  </div>
-
-  <div class="container" id="painel">
-    <div class="card">
-      <div class="title">Limite de Compras</div>
-      <div class="value" id="limiteCompras">--</div>
+  <div class="grid" id="painel" style="display:none">
+    <div class="card" style="grid-column:1/-1">
+      <div class="title">Resumo</div>
+      <div class="kpis">
+        <div class="kpi"><div class="muted">Meta de Compras</div><div class="value" id="kpiMeta">--</div><div class="muted" id="kpiMetaHint">--</div></div>
+        <div class="kpi"><div class="muted">Compras Realizadas</div><div class="value" id="kpiRealizado">--</div><div class="muted" id="kpiUtil">--</div></div>
+        <div class="kpi"><div class="muted">Cancelamentos (R$)</div><div class="value" id="kpiCanc">--</div><div class="muted" id="kpiCancQtd">--</div></div>
+        <div class="kpi"><div class="muted">Trava de Compras</div><div class="value" id="kpiTrava">--</div><div class="muted" id="kpiTravaHint">--</div></div>
+        <div class="kpi"><div class="muted">Fornecedores (Total)</div><div class="value" id="kpiFornec">--</div><div class="muted" id="kpiSobra">--</div></div>
+      </div>
     </div>
+
     <div class="card">
-      <div class="title">Compras Realizadas</div>
-      <div class="value" id="comprasRealizadas">--</div>
+      <div class="title">Metas x Realizado</div>
+      <canvas id="chartMeta"></canvas>
+      <div id="metaPill" style="margin-top:8px"></div>
     </div>
+
+    <div class="card">
+      <div class="title">Cancelamentos (por motivo)</div>
+      <canvas id="chartCancel"></canvas>
+      <ul id="listaCancel" style="margin-top:8px"></ul>
+    </div>
+
+    <div class="card">
+      <div class="title">Trava de Compras • Top Subcategorias (Fornecedores)</div>
+      <canvas id="chartTravaCats"></canvas>
+      <ul id="listaTravaCats" style="margin-top:8px"></ul>
+    </div>
+
     <div class="card">
       <div class="title">Satisfação dos Clientes</div>
-      <canvas id="graficoSatisfacao"></canvas>
-    </div>
-    <div class="card">
-      <div class="title">Avisos Importantes</div>
-      <ul id="avisos"></ul>
+      <canvas id="chartSat"></canvas>
     </div>
   </div>
+</div>
 
 <script>
-  const usuariosPorEmpresa = {
-    "MERCATTO DELICIA": ["Lucas", "Maria"],
-    "DELICIA GOURMET": ["João", "Patrícia"],
-    "VILLA GOURMET": ["Carlos", "Fernanda"],
-    "M. KIDS": ["Bruno"],
-    "PADARIA DELICIA": ["Ana", "Roberto"]
-  };
+// ====== Configurações de usuários
+const usuariosPorEmpresa = {"MERCATTO DELICIA":["Lucas","Maria"],"DELICIA GOURMET":["João","Patrícia"],"VILLA GOURMET":["Carlos","Fernanda"],"M. KIDS":["Bruno"],"PADARIA DELICIA":["Ana","Roberto"]};
+const senhaPorUsuario = {"Lucas":"1234","Maria":"5678","João":"abcd","Patrícia":"efgh","Carlos":"senha1","Fernanda":"senha2","Bruno":"kids123","Ana":"pao321","Roberto":"padaria"};
 
-  const senhaPorUsuario = {
-    "Lucas": "1234",
-    "Maria": "5678",
-    "João": "abcd",
-    "Patrícia": "efgh",
-    "Carlos": "senha1",
-    "Fernanda": "senha2",
-    "Bruno": "kids123",
-    "Ana": "pao321",
-    "Roberto": "padaria"
-  };
+// ====== Endpoints (já informados por você)
+const URL_METAS = 'https://script.google.com/macros/s/AKfycbziCPWWJxxfrnSeT3RHsNbw21z9MfnnB8JpV7ZQcZnvUQQ7dL3lVJdpUG7epACVjFaO/exec'; // texto
+const URL_CANCEL = 'https://script.google.com/macros/s/AKfycbzM1mmixFkFE5tbC-0Evc6GVyZEJkh88HCikNK08FujRwCrgUA1e_E29nMHip81kRPoSg/exec'; // texto
+const URL_SAT = 'https://script.google.com/macros/s/AKfycbyK3A5CDn_EgA3pbRVToh87_qKWvbIry886OkR1AdkJi7RyvSgcwY0BmRqhbKQnEKwgrA/exec'; // json
+const URL_TRAVAS = 'https://script.google.com/macros/s/AKfycbzkj-mfUUqwetIY5JKj0zPpTftzgVqCDFJLu45PlznBAGF4xm97EHnZQwqYUfhsS_1lFA/exec'; // JSON (conforme script que geramos)
 
-  const urlMetas = 'https://script.google.com/macros/s/AKfycbzyiL6yNCj_FYWiQ2PS88mthToCvWM1wJ0q7CQy8asyg-59L8YezKzFY6d-lgQU0ni3/exec';
-  const urlFaturamento = 'https://script.google.com/macros/s/AKfycbz9GQLrIB4oiX0jBQ7yaDO_IiMz3ER7lQT094sp5y2VUGgQWBaz3G1fa7s4ZbiWli_O/exec';
+let chMeta, chCancel, chSat, chTrava;
 
-  document.getElementById("empresa").addEventListener("change", () => {
-    const empresa = document.getElementById("empresa").value;
-    const usuarios = usuariosPorEmpresa[empresa] || [];
-    const selectUsuario = document.getElementById("usuario");
-    selectUsuario.innerHTML = '<option value="">Selecionar...</option>' + usuarios.map(u => `<option>${u}</option>`).join('');
+document.getElementById('empresa').addEventListener('change', e => {
+  const emp = e.target.value; const users = usuariosPorEmpresa[emp]||[];
+  const sel = document.getElementById('usuario'); sel.innerHTML = '<option value="">Selecionar...</option>'+users.map(u=>`<option>${u}</option>`).join('');
+});
+
+document.getElementById('btnEntrar').addEventListener('click', filtrarPainel);
+
+async function filtrarPainel(){
+  const empresa = document.getElementById('empresa').value;
+  const usuario = document.getElementById('usuario').value;
+  const periodo = document.getElementById('periodo').value; // YYYY-MM
+  if(!empresa || !usuario){ alert('Preencha todos os campos.'); return; }
+  const senha = prompt(`Digite a senha para ${usuario}`);
+  if(senha !== senhaPorUsuario[usuario]){ alert('Senha incorreta.'); return; }
+
+  const qs = periodo ? `?periodo=${encodeURIComponent(periodo)}` : '';
+
+  // Carrega tudo em paralelo
+  const [metasTxt, cancelTxt, satJson, travasJson] = await Promise.all([
+    fetch(URL_METAS + qs).then(r=>r.text()).catch(()=>''),
+    fetch(URL_CANCEL + qs).then(r=>r.text()).catch(()=>''),
+    fetch(URL_SAT + qs).then(r=>r.json()).catch(()=>[]),
+    fetch(URL_TRAVAS + (qs + (qs? '&':'?') + 'empresa=' + encodeURIComponent(empresa))).then(r=>r.json()).catch(()=>[])
+  ]);
+
+  // Normalizações
+  const metas = parseMetasTexto(metasTxt); // [{Empresa, LimiteCompras, RealizadoCompras}]
+  const canc = parseCancelamentosTexto(cancelTxt); // [{Empresa, Item, Valor}]
+  const satAgg = aggregateSatisfacao(satJson); // {empresa: {Excelente,Bom,Regular,Ruim}}
+
+  const metaEmp = metas.find(x=>x.Empresa.toUpperCase().includes(empresa.toUpperCase()))||{};
+  const cancEmp = canc.filter(x=>x.Empresa.toUpperCase().includes(empresa.toUpperCase()));
+  const trav = Array.isArray(travasJson) ? travasJson[0] : null; // endpoint já filtrado por empresa
+
+  // KPIs de metas
+  const limite = num(metaEmp.LimiteCompras);
+  const realizado = num(metaEmp.RealizadoCompras);
+  setText('kpiMeta', moeda(limite)); setText('kpiRealizado', moeda(realizado));
+  const util = limite>0? (realizado/limite)*100 : 0; setText('kpiUtil', `${util.toFixed(1)}% do limite`);
+  document.getElementById('metaPill').innerHTML = pill(util>100? '🚨 Estouro do limite':'✅ Dentro do limite', util>100? 'bad': (util>=80?'warn':'ok'));
+
+  // KPIs de cancelamentos
+  const cancTotal = soma(cancEmp.map(i=>num(i.Valor)));
+  setText('kpiCanc', moeda(cancTotal)); setText('kpiCancQtd', `${cancEmp.length} itens`);
+
+  // KPIs de TRAVAS
+  if(trav){
+    setText('kpiTrava', moeda(trav.travaCompras));
+    setText('kpiFornec', moeda(Math.abs(trav.fornecedoresTotal||trav.totalFornecedores||0)));
+    const sobra = trav.sobra ?? (trav.travaCompras - Math.abs(trav.fornecedoresTotal||0));
+    setText('kpiSobra', (sobra>=0? 'Sobra: ':'Estouro: ')+moeda(Math.abs(sobra)));
+    const consumo = trav.consumoPct ?? (trav.travaCompras>0? (Math.abs(trav.fornecedoresTotal||0)/trav.travaCompras)*100:0);
+    document.getElementById('kpiTravaHint').textContent = `${consumo.toFixed(1)}% consumidos`;
+
+    // Top subcategorias de fornecedores (se vierem no JSON)
+    const catFor = (trav.categorias||[]).find(c=> (c.nome||'').toLowerCase().includes('fornecedor'));
+    const subs = catFor? (catFor.subs||[]) : [];
+    const top = [...subs].sort((a,b)=>Math.abs(b.valor)-Math.abs(a.valor)).slice(0,10);
+    drawBar('chartTravaCats', top.map(x=>x.nome), top.map(x=>Math.abs(x.valor)), 'R$');
+    const ul = document.getElementById('listaTravaCats'); ul.innerHTML='';
+    top.forEach(s=>{ const li=document.createElement('li'); li.textContent = `${s.nome} — ${moeda(s.valor)}${s.pctDaTrava? ' • '+s.pctDaTrava.toFixed(1)+'% da TRAVA':''}`; ul.appendChild(li); });
+  }
+
+  // Gráficos meta/cancelamentos/satisfação
+  drawBar('chartMeta', ['Meta','Realizado'], [limite,realizado], 'R$');
+
+  const motMap = {}; cancEmp.forEach(i=>{const k=i.Motivo||'Sem motivo'; motMap[k]=(motMap[k]||0)+num(i.Valor);});
+  const motLabels = Object.keys(motMap); const motVals = motLabels.map(k=>motMap[k]);
+  drawBar('chartCancel', motLabels, motVals, 'R$');
+
+  const sat = satAgg[empresa] || {Excelente:0,Bom:0,Regular:0,Ruim:0};
+  drawPie('chartSat', ['Excelente','Bom','Regular','Ruim'], [sat.Excelente,sat.Bom,sat.Regular,sat.Ruim]);
+
+  // Lista de cancelamentos (top 5 por valor)
+  const list = document.getElementById('listaCancel'); list.innerHTML='';
+  cancEmp.sort((a,b)=>num(b.Valor)-num(a.Valor)).slice(0,5).forEach(it=>{
+    const li=document.createElement('li'); li.textContent = `${it.Item||'Item'} — ${moeda(it.Valor)}${it.Motivo? ' • '+it.Motivo:''}`; list.appendChild(li);
   });
 
-  async function filtrarPainel() {
-    const empresa = document.getElementById("empresa").value;
-    const usuario = document.getElementById("usuario").value;
+  document.getElementById('painel').style.display='grid';
+}
 
-    if (!empresa || !usuario) {
-      alert("Preencha todos os campos.");
-      return;
-    }
-
-    const senhaDigitada = prompt(`Digite a senha para o usuário ${usuario}:`);
-    const senhaCorreta = senhaPorUsuario[usuario];
-
-    if (senhaDigitada !== senhaCorreta) {
-      alert("Senha incorreta. Acesso negado.");
-      return;
-    }
-
-    const metas = await fetch(urlMetas).then(res => res.json());
-    const faturamento = await fetch(urlFaturamento).then(res => res.json());
-
-    const meta = metas.find(item => item.Empresa === empresa && item.Usuário === usuario);
-    const fat = faturamento.find(item => item.Empresa === empresa && item.Usuário === usuario);
-
-    document.getElementById("limiteCompras").textContent = meta ? formatar(meta.LimiteCompras) : '--';
-    document.getElementById("comprasRealizadas").textContent = fat ? formatar(fat.ComprasRealizadas) : '--';
-
-    atualizarGraficoSatisfacao(meta);
-    atualizarAvisos(meta);
-
-    document.getElementById("painel").style.display = "grid";
-    document.querySelector(".login-box").style.display = "none";
-    document.querySelector(".logo").style.display = "none";
+// ====== Parsers de texto
+function parseMetasTexto(text){
+  const linhas = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const out=[]; let emp=null; for(let i=0;i<linhas.length;i++){
+    const l=linhas[i];
+    if(/^[A-ZÁÃÂÉÊÍÓÔÕÚÇ\.\s\-]+$/.test(l) && !l.includes('ANÁLISE') && !l.includes('ATUALIZADO')) emp=l.replace(/[*•]/g,'').trim();
+    const mMeta=l.match(/Meta:\s*R\$\s*([0-9\._.,]+)/i);
+    if(mMeta){ const metaVal=num(mMeta[1]); let real=0; for(let j=i+1;j<i+5&&j<linhas.length;j++){const mr=linhas[j].match(/Realizado:\s*R\$\s*([0-9\._.,]+)/i); if(mr){real=num(mr[1]); break;}} if(emp) out.push({Empresa:emp,LimiteCompras:metaVal,RealizadoCompras:real}); }
   }
+  return out;
+}
+function parseCancelamentosTexto(text){
+  const linhas = text.split(/\r?\n/); const out=[]; let empresa=null; for(const raw of linhas){const l=raw.trim(); const cab=l.match(/^\*\s*([^*\-–]+?)\s*[\-–]\s*R\$\s*([0-9\._.,]+)/); if(cab){empresa=cab[1].trim(); continue;} const it=l.match(/^(?:[\p{Emoji}\p{So}\p{Sk}\p{Sc}\p{P}]{1,3})?\s*([^\-–]+?)\s*[\-–]\s*R\$\s*([0-9\._.,]+)/u); if(it&&empresa){ out.push({Empresa:empresa, Item:it[1].trim(), Valor:num(it[2])}); }} return out;
+}
+function aggregateSatisfacao(arr){
+  const map={}; const norm=(w)=>{const s=String(w||'').toLowerCase(); if(s.startsWith('ótim')||s.startsWith('otim'))return 'Excelente'; if(s.startsWith('bom'))return 'Bom'; if(s.startsWith('regular'))return 'Regular'; if(s.startsWith('ruim'))return 'Ruim'; return null;};
+  const fields=['ambiente','atendimento','comida','musica','climatizacao','bebidas','iluminacao'];
+  arr.forEach(r=>{ const emp=(r.empresa||r.Empresa||'').toUpperCase(); if(!map[emp]) map[emp]={Excelente:0,Bom:0,Regular:0,Ruim:0}; fields.forEach(f=>{const b=norm(r[f]); if(b) map[emp][b]++;}); });
+  return Object.fromEntries(Object.entries(map).map(([k,v])=>[k.replace(/\s+/g,' ').trim(),v]));
+}
 
-  function atualizarGraficoSatisfacao(meta) {
-    const ctx = document.getElementById('graficoSatisfacao').getContext('2d');
-    const data = meta ? [meta.Excelente, meta.Bom, meta.Regular, meta.Ruim] : [0, 0, 0, 0];
-    new Chart(ctx, {
-      type: 'pie',
-      data: {
-        labels: ['Excelente', 'Bom', 'Regular', 'Ruim'],
-        datasets: [{
-          data,
-          backgroundColor: ['#27ae60', '#2980b9', '#f1c40f', '#e74c3c']
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { position: 'bottom' } }
-      }
-    });
-  }
-
-  function atualizarAvisos(meta) {
-    const ul = document.getElementById("avisos");
-    ul.innerHTML = '';
-    if (meta && meta.Avisos) {
-      meta.Avisos.split(';').forEach(aviso => {
-        const li = document.createElement('li');
-        li.textContent = aviso;
-        ul.appendChild(li);
-      });
-    }
-  }
-
-  function formatar(valor) {
-    return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
+// ====== Charts & utils
+function drawBar(id, labels, data, label){ const ctx=document.getElementById(id).getContext('2d'); const prev=ctx._chart; if(prev) prev.destroy&&prev.destroy(); const ch=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label,data}]} ,options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}}); ctx._chart=ch; return ch;}
+function drawPie(id, labels, data){ const ctx=document.getElementById(id).getContext('2d'); const prev=ctx._chart; if(prev) prev.destroy&&prev.destroy(); const ch=new Chart(ctx,{type:'pie',data:{labels,datasets:[{data,backgroundColor:['#22c55e','#0ea5e9','#f59e0b','#ef4444']}]} ,options:{responsive:true,plugins:{legend:{position:'bottom'}}}}); ctx._chart=ch; return ch;}
+function setText(id, t){ const el=document.getElementById(id); if(el) el.textContent=t; }
+function soma(a){ return a.reduce((x,y)=>x+(+y||0),0); }
+function num(v){ const s=String(v||'').replace(/[^0-9,.-]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:n; }
+function moeda(v){ return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+function pill(txt,kind){ return `<span class="pill ${kind}">${txt}</span>`; }
 </script>
-
 </body>
 </html>
