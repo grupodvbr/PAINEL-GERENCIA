@@ -11,10 +11,8 @@
   body{background:var(--bg);color:var(--ink);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;margin:0}
   header{position:sticky;top:0;z-index:10;background:#0b1220;color:#fff;padding:14px 18px;font-weight:700;box-shadow:0 2px 12px rgba(0,0,0,.25)}
   .wrap{padding:18px;max-width:1400px;margin:0 auto}
-  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;background:var(--card);border-radius:14px;padding:12px;box-shadow:var(--shadow)}
-  select,input[type="month"],button{padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px}
-  button{background:var(--primary);color:#fff;border:none;cursor:pointer}
-  button:hover{filter:brightness(.95)}
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;background:var(--card);border-radius:14px;padding:12px;box-shadow:var(--shadow)}
+  select,input[type="month"]{padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px}
   .section{margin-top:16px}
   .company>.title{font-weight:800;margin:10px 2px 8px}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
@@ -26,6 +24,7 @@
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:12px}
   .card{background:var(--card);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
   .card .title{font-weight:700;margin-bottom:8px}
+  /* Modal */
   #modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;z-index:1000}
   #modal .box{background:#fff;padding:18px;border-radius:12px;max-width:560px;width:92%;max-height:80%;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   #modal .box h3{margin:0 0 8px}
@@ -48,21 +47,14 @@
         <option>PADARIA DELICIA</option>
       </select>
     </label>
-    <label>Usuário
-      <select id="usuario">
-        <option>Lucas</option><option>Maria</option><option>João</option>
-        <option>Patrícia</option><option>Carlos</option><option>Fernanda</option>
-        <option>Bruno</option><option>Ana</option><option>Roberto</option>
-      </select>
-    </label>
     <label>Período
       <input id="periodo" type="month" />
     </label>
-    <div style="display:flex;align-items:end"><button id="btn">Entrar</button></div>
   </div>
   <div id="content" class="section"></div>
 </div>
 
+<!-- Modal -->
 <div id="modal">
   <div class="box">
     <h3 id="modal-title">Detalhamento Fornecedores</h3>
@@ -73,32 +65,26 @@
 
 <script>
 /* ========= ENDPOINTS ========= */
-const API_BASE = 'https://script.google.com/macros/s/AKfycbxUf9oERSm53CpZQKkpp3mFXR3aLWc4tzSVW8DPHqsGvVt-keB_KtzAJiIgLMm9GYnB/exec';
+const API_BASE = 'https://script.google.com/macros/s/AKfycbxUf9oERSm53CpZQKkpp3mFXR3aLWc4tzSVW8DPHqsGvVt-keB_KtzAJiIgLMm9GYnB/exec'; // TRAVAS
 const URL_METAS  = 'https://script.google.com/macros/s/AKfycbziCPWWJxxfrnSeT3RHsNbw21z9MfnnB8JpV7ZQcZnvUQQ7dL3lVJdpUG7epACVjFaO/exec';
 const URL_CANCEL = 'https://script.google.com/macros/s/AKfycbzM1mmixFkFE5tbC-0Evc6GVyZEJkh88HCikNK08FujRwCrgUA1e_E29nMHip81kRPoSg/exec';
 const URL_SAT    = 'https://script.google.com/macros/s/AKfycbyK3A5CDn_EgA3pbRVToh87_qKWvbIry886OkR1AdkJi7RyvSgcwY0BmRqhbKQnEKwgrA/exec';
 
 /* ========= HELPERS ========= */
 const EMPRESAS=['MERCATTO DELICIA','DELICIA GOURMET','VILLA GOURMET','M. KIDS','PADARIA DELICIA'];
-const USER_EMP_MAP={'LUCAS':'MERCATTO DELICIA','MARIA':'DELICIA GOURMET','JOAO':'VILLA GOURMET','PATRICIA':'M. KIDS','CARLOS':'PADARIA DELICIA','FERNANDA':'MERCATTO DELICIA','BRUNO':'DELICIA GOURMET','ANA':'VILLA GOURMET','ROBERTO':'PADARIA DELICIA'};
 const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
 const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const aliases=(obj,keys,def=0)=>{for(const k of keys){if(obj&&obj[k]!=null&&obj[k]!=='' && !isNaN(Number(obj[k]))) return Number(obj[k]);}return def;};
 const idSafe=(p,k)=>`${p}-${norm(k).replace(/[^A-Z0-9]+/g,'-')}-${Math.random().toString(36).slice(2,6)}`;
 
-/* ========= FONTE 9: pega pronto ou calcula pela COLUNA C (ou listas genéricas) ========= */
+/* ========= FONTE 9: pega pronto ou calcula ========= */
 function getFonte9Total(rec){
-  // 1) chaves comuns prontas
   const ready = ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'];
   for(const k of ready){ if(rec && rec[k]!=null && rec[k]!=='' && !isNaN(Number(rec[k]))) return Number(rec[k]); }
-
-  // 2) detalhe explícito de fonte 9
   if (Array.isArray(rec?.fonte9Detalhe)) {
     const t = rec.fonte9Detalhe.reduce((acc, it)=> acc + Math.abs(Number(it.valor||it.total||0)), 0);
     if (t) return t;
   }
-
-  // 3) estrutura por categorias/subs (somar apenas font==9)
   if (Array.isArray(rec?.categorias)) {
     let total = 0;
     rec.categorias.forEach(cat=>{
@@ -110,8 +96,7 @@ function getFonte9Total(rec){
     });
     if (total) return total;
   }
-
-  // 4) listas genéricas com {valor, font}
+  // outras estruturas genéricas
   const lists = [rec?.todos, rec?.itens, rec?.rows, rec?.linhas];
   for(const L of lists){
     if (Array.isArray(L)){
@@ -119,36 +104,15 @@ function getFonte9Total(rec){
       L.forEach(r=>{
         const f = Number(r?.font);
         const v = Number(r?.valor ?? r?.total ?? 0);
-        if (f===9){ total += Math.abs(v); any=true; }
+        if (isNaN(f) || f===9){ total += Math.abs(v); any=true; }
       });
       if (any) return total;
     }
   }
-
-  // 5) coluna C enviada isolada (C1..Cn)
-  const cols = [rec?.colCAll, rec?.colC, rec?.colunaC, rec?.colunaValores];
-  for(const col of cols){
-    if (Array.isArray(col)){
-      let total=0, any=false;
-      col.forEach(item=>{
-        if (item && typeof item==='object'){
-          const f = Number(item.font);
-          const v = Number(item.valor ?? item.total ?? 0);
-          if (isFinite(v) && (isNaN(f) || f===9)){ total += Math.abs(v); any=true; }
-        }else{
-          const v = Number(item||0);
-          if (isFinite(v)){ total += Math.abs(v); any=true; }
-        }
-      });
-      if (any) return total;
-    }
-  }
-
-  // 6) grade 2D (array de arrays): usa a COLUNA 3 (C) como valores
   if (Array.isArray(rec?.grid) && Array.isArray(rec.grid[0])) {
     let total=0, any=false;
     for (const row of rec.grid){
-      const v = Number(row[2] ?? 0); // C
+      const v = Number(row[2] ?? 0); // coluna C
       if (isFinite(v)){ total += Math.abs(v); any=true; }
     }
     if (any) return total;
@@ -156,13 +120,11 @@ function getFonte9Total(rec){
   if (Array.isArray(rec?.tabela) && Array.isArray(rec.tabela[0])) {
     let total=0, any=false;
     for (const row of rec.tabela){
-      const v = Number(row[2] ?? 0); // C
+      const v = Number(row[2] ?? 0); // coluna C
       if (isFinite(v)){ total += Math.abs(v); any=true; }
     }
     if (any) return total;
   }
-
-  console.warn('Fonte9 total não encontrado em campos padrão; retornando 0. Payload:', rec);
   return 0;
 }
 
@@ -200,7 +162,7 @@ async function fetchTravasPorEmpresa(empresa, periodo){
   const qs = `?empresa=${encodeURIComponent(empresa)}${periodo?`&periodo=${encodeURIComponent(periodo)}`:''}`;
   const res = await fetch(API_BASE + qs);
   let json;
-  try{ json = await res.json(); }catch(e){ throw new Error('Resposta não é JSON'); }
+  try{ json = await res.json(); }catch{ throw new Error('Resposta não é JSON'); }
   if(json?.ok===false){ throw new Error(json.error || 'Erro do endpoint'); }
   if (json?.empresa) return json;
   if (Array.isArray(json?.data)) return json.data.find(r=>norm(r.empresa||r.Empresa)===norm(empresa)) || json.data[0];
@@ -208,14 +170,10 @@ async function fetchTravasPorEmpresa(empresa, periodo){
   return null;
 }
 
-/* ========= UI eventos ========= */
-document.getElementById('btn').addEventListener('click',()=>{
-  const usuarioSel=document.getElementById('usuario').value;
-  const empAuto=USER_EMP_MAP[norm(usuarioSel)] || 'TODAS AS EMPRESAS';
-  document.getElementById('empresa').value=empAuto;
-  run();
-});
-window.addEventListener('DOMContentLoaded', () => run());
+/* ========= UI ========= */
+document.getElementById('empresa').addEventListener('change', run);
+document.getElementById('periodo').addEventListener('change', run);
+window.addEventListener('DOMContentLoaded', run);
 
 /* ========= Render principal ========= */
 async function run(){
@@ -224,7 +182,7 @@ async function run(){
   const container=document.getElementById('content'); 
   container.innerHTML='<div style="padding:12px;color:#64748b">Carregando…</div>';
 
-  // carrega metas/cancel/sat uma vez (filtra por empresa depois)
+  // carrega metas/cancel/sat uma vez
   const qs=periodo?`?periodo=${encodeURIComponent(periodo)}`:'';
   const [metasTxt,cancelTxt,satJson]=await Promise.all([
     fetch(URL_METAS+qs).then(r=>r.text()).catch(()=>''), 
@@ -236,38 +194,35 @@ async function run(){
   const satAgg=aggregateSatisfacao(satJson);
 
   const empresas = empSel==='TODAS AS EMPRESAS' ? EMPRESAS : [empSel];
-  const parts=[];
+  const blocks=[];
 
   for(const emp of empresas){
     try{
       const rec = await fetchTravasPorEmpresa(emp, periodo);
-      if(!rec){ parts.push(renderErro(emp,'Sem dados para esta empresa.')); continue; }
+      if(!rec){ blocks.push(renderErro(emp,'Sem dados para esta empresa.')); continue; }
 
-      // Aliases TRAVAS
-      const travaTotal = aliases(rec, ['travaTotal','trava_total','E2','travaTotalE2'], 0);             // E2
-      const fornecLim  = aliases(rec, ['travaCompras','trava_compras','fornecedoresTotal','D2'], 0);    // D2
+      const travaTotal = aliases(rec, ['travaTotal','trava_total','E2','travaTotalE2'], 0);          // E2
+      const fornecLim  = aliases(rec, ['travaCompras','trava_compras','fornecedoresTotal','D2'], 0); // D2
       let fonte9Tot    = aliases(rec, ['totalFonte9','fonte9Total','valorCompradoFonte9','compradoFonte9','valorTotalComprado'], 0);
-      if (!fonte9Tot)  fonte9Tot = getFonte9Total(rec); // calcula por coluna C / fonte 9
+      if (!fonte9Tot)  fonte9Tot = getFonte9Total(rec); // calcula se não veio pronto
       const fornComp   = aliases(rec, ['fornecedoresComprado','valorCompradoFornecedores','compradoFornecedores','C2_C19'], 0);
 
       const pctTotal = travaTotal>0 ? (fonte9Tot/travaTotal*100) : 0;
       const pctFor   = fornecLim>0  ? (fornComp/fornecLim*100)   : 0;
       const det = rec.fornecedoresDetalhe || rec.detalhesFornecedores || rec.detalhamento || [];
 
-      // Metas/Cancel/SAT por empresa
       const empNorm=norm(emp);
       const m=metas.find(x=>norm(x.empresa)===empNorm) || {meta:0,realizado:0};
       const c=cancel.find(x=>norm(x.empresa)===empNorm) || {itens:[],total:0};
       const sat=satAgg[empNorm]||{Excelente:0,Bom:0,Regular:0,Ruim:0};
 
-      parts.push(renderEmpresa(emp,{travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det,m,c,sat}));
+      blocks.push(renderEmpresa(emp,{travaTotal,fonte9Tot,fornecLim,fornComp,pctTotal,pctFor,det,m,c,sat}));
     }catch(err){
-      console.error('Erro ao carregar', emp, err);
-      parts.push(renderErro(emp, String(err.message||err)));
+      blocks.push(renderErro(emp, String(err.message||err)));
     }
   }
 
-  container.innerHTML = parts.join('');
+  container.innerHTML = blocks.join('');
 }
 
 /* ========= Render helpers ========= */
