@@ -6,10 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-  :root{
-    --bg:#f6f8fb; --ink:#0f172a; --muted:#64748b; --card:#fff; --primary:#0ea5e9;
-    --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; --shadow:0 1px 8px rgba(0,0,0,.06)
-  }
+  :root{--bg:#f6f8fb;--ink:#0f172a;--muted:#64748b;--card:#fff;--primary:#0ea5e9;--shadow:0 1px 8px rgba(0,0,0,.06)}
   *{box-sizing:border-box}
   body{background:var(--bg);color:var(--ink);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;margin:0}
   header{position:sticky;top:0;z-index:10;background:#0b1220;color:#fff;padding:14px 18px;font-weight:700;box-shadow:0 2px 12px rgba(0,0,0,.25)}
@@ -19,8 +16,7 @@
   button{background:var(--primary);color:#fff;border:none;cursor:pointer}
   button:hover{filter:brightness(.95)}
   .section{margin-top:16px}
-  .company{background:transparent}
-  .company > .title{font-weight:800;margin:10px 2px 8px}
+  .company>.title{font-weight:800;margin:10px 2px 8px}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
   .kpi{background:var(--card);border-radius:14px;padding:12px;box-shadow:var(--shadow)}
   .kpi .label{color:var(--muted);font-size:12px;margin-bottom:4px}
@@ -31,9 +27,7 @@
   .card .title{font-weight:700;margin-bottom:8px}
   .pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px}
   .ok{background:#ecfdf5;color:#065f46}.warn{background:#fffbeb;color:#92400e}.bad{background:#fef2f2;color:#991b1b}
-  ul{margin:8px 0 0;padding-left:18px}
-  li+li{margin-top:6px}
-  canvas{max-width:100%}
+  ul{margin:8px 0 0;padding-left:18px} li+li{margin-top:6px}
 </style>
 </head>
 <body>
@@ -61,152 +55,120 @@
     <label>Período
       <input id="periodo" type="month" />
     </label>
-    <div style="display:flex;align-items:end"><button id="btn" title="Atualizar">Entrar</button></div>
+    <div style="display:flex;align-items:end"><button id="btn">Entrar</button></div>
   </div>
-
   <div id="content" class="section"></div>
 </div>
 
 <script>
-/* --------------------- ENDPOINTS --------------------- */
-const URL_METAS  = 'https://script.google.com/macros/s/AKfycbziCPWWJxxfrnSeT3RHsNbw21z9MfnnB8JpV7ZQcZnvUQQ7dL3lVJdpUG7epACVjFaO/exec';   // TEXT
-const URL_CANCEL = 'https://script.google.com/macros/s/AKfycbzM1mmixFkFE5tbC-0Evc6GVyZEJkh88HCikNK08FujRwCrgUA1e_E29nMHip81kRPoSg/exec'; // TEXT
-const URL_SAT    = 'https://script.google.com/macros/s/AKfycbyK3A5CDn_EgA3pbRVToh87_qKWvbIry886OkR1AdkJi7RyvSgcwY0BmRqhbKQnEKwgrA/exec'; // JSON
-const URL_TRAVAS = 'https://script.google.com/macros/s/AKfycbzkj-mfUUqwetIY5JKj0zPpTftzgVqCDFJLu45PlznBAGF4xm97EHnZQwqYUfhsS_1lFA/exec'; // JSON
+// ---------- ENDPOINTS ----------
+const URL_METAS  = 'https://script.google.com/macros/s/AKfycbziCPWWJxxfrnSeT3RHsNbw21z9MfnnB8JpV7ZQcZnvUQQ7dL3lVJdpUG7epACVjFaO/exec';
+const URL_CANCEL = 'https://script.google.com/macros/s/AKfycbzM1mmixFkFE5tbC-0Evc6GVyZEJkh88HCikNK08FujRwCrgUA1e_E29nMHip81kRPoSg/exec';
+const URL_SAT    = 'https://script.google.com/macros/s/AKfycbyK3A5CDn_EgA3pbRVToh87_qKWvbIry886OkR1AdkJi7RyvSgcwY0BmRqhbKQnEKwgrA/exec';
+const URL_TRAVAS = 'https://script.google.com/macros/s/AKfycbzkj-mfUUqwetIY5JKj0zPpTftzgVqCDFJLu45PlznBAGF4xm97EHnZQwqYUfhsS_1lFA/exec';
 
-/* --------------------- HELPERS --------------------- */
-const EMPRESAS = ['MERCATTO DELICIA','DELICIA GOURMET','VILLA GOURMET','M. KIDS','PADARIA DELICIA'];
-const MAP_TRAVAS = {
-  'MERCATTO DELICIA':'MERCATTO DELICIA', // se o endpoint usar “MERCATTO”, troque aqui
+// ---------- HELPERS ----------
+const EMPRESAS=['MERCATTO DELICIA','DELICIA GOURMET','VILLA GOURMET','M. KIDS','PADARIA DELICIA'];
+const MAP_TRAVAS={
+  'MERCATTO DELICIA':'MERCATTO DELICIA', // ajuste para 'MERCATTO' se o endpoint devolver assim
   'DELICIA GOURMET':'DELICIA GOURMET',
   'VILLA GOURMET':'VILLA GOURMET',
   'M. KIDS':'M. KIDS',
   'PADARIA DELICIA':'PADARIA DELICIA'
 };
+const norm=s=>String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
+const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+function num(v){const s=String(v||'').replace(/[^0-9,.-]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.');const n=parseFloat(s);return isNaN(n)?0:n;}
+function pill(txt,kind){return `<span class="pill ${kind}">${txt}</span>`;}
+function idOf(b){return `${b}-${Math.random().toString(36).slice(2,8)}`;}
 
-const norm = s => String(s||'').normalize('NFD').replace(/\p{Diacritic}/gu,'')
-                   .replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();
-const moeda = v => Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-function num(v){ const s=String(v||'').replace(/[^0-9,.-]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:n; }
-function pill(txt,kind){ return `<span class="pill ${kind}">${txt}</span>`; }
-function idOf(base){ return `${base}-${Math.random().toString(36).slice(2,8)}`; }
-
-/* fonte 9: subcategorias; fonte 10: categorias — só somamos FONTE 9 */
+// fonte 9 (subcategorias) somada; fonte 10 (categorias) ignorada
 function somasPorFonte9(t){
-  const categorias = Array.isArray(t?.categorias) ? t.categorias : [];
-  const pickFont9 = s => (s && (s.font === 9 || s.isSub === true || s.font == null));
-  const allSubs9  = categorias.flatMap(c => (c.subs||[]).filter(pickFont9));
-  const totalGeral9 = allSubs9.reduce((acc,s)=>acc + Math.abs(Number(s.valor||0)),0);
-
-  const catFor = categorias.find(c => norm(c.nome).includes('FORNECEDOR'));
-  const forSubs9 = (catFor?.subs||[]).filter(pickFont9);
-  const fornecedores9 = forSubs9.reduce((acc,s)=>acc + Math.abs(Number(s.valor||0)),0);
-
-  return { totalGeral9, fornecedores9, forSubs9 };
+  const categorias=Array.isArray(t?.categorias)?t.categorias:[];
+  const pickFont9=s=> (s && (s.font===9 || s.isSub===true || s.font==null));
+  const allSubs9=categorias.flatMap(c=>(c.subs||[]).filter(pickFont9));
+  const totalGeral9=allSubs9.reduce((a,s)=>a+Math.abs(Number(s.valor||0)),0);
+  const catFor=categorias.find(c=>norm(c.nome).includes('FORNECEDOR'));
+  const forSubs9=(catFor?.subs||[]).filter(pickFont9);
+  const fornecedores9=forSubs9.reduce((a,s)=>a+Math.abs(Number(s.valor||0)),0);
+  return {totalGeral9, fornecedores9, forSubs9};
 }
 
-/* --------------------- PARSERS TEXTO --------------------- */
+// ---------- Parsers (TEXTO) ----------
 function parseMetasTexto(text){
-  const linhas = text.split(/\r?\n/).map(l=>l.trim());
-  const out=[]; let emp=null;
+  const linhas=text.split(/\r?\n/).map(l=>l.trim()), out=[]; let emp=null;
   for(let i=0;i<linhas.length;i++){
     const l=linhas[i];
     if(/^[A-ZÁÃÂÉÊÍÓÔÕÚÇ\.\s\-]+$/.test(l) && !/ANÁLISE|ATUALIZADO/i.test(l)) emp=l.replace(/[*•]/g,'').trim();
-    const mMeta=l.match(/Meta:\s*R\$\s*([0-9\._.,]+)/i);
-    if(mMeta){
-      const metaVal=num(mMeta[1]); let real=0;
-      for(let j=i+1;j<i+5 && j<linhas.length;j++){
-        const mR=linhas[j].match(/Realizado:\s*R\$\s*([0-9\._.,]+)/i);
-        if(mR){ real=num(mR[1]); break; }
-      }
-      if(emp) out.push({empresa:emp, meta:metaVal, realizado:real});
-    }
+    const m=l.match(/Meta:\s*R\$\s*([0-9\._.,]+)/i);
+    if(m){const meta=num(m[1]);let real=0;for(let j=i+1;j<i+5&&j<linhas.length;j++){const r=linhas[j].match(/Realizado:\s*R\$\s*([0-9\._.,]+)/i);if(r){real=num(r[1]);break;}} if(emp) out.push({empresa:emp,meta,realizado:real});}
   }
   return out;
 }
-function parseCancelamentosTexto(text){
-  const linhas=text.split(/\r?\n/); const out=[]; let empresa=null; let itens=[]; let total=0;
-  const push=()=>{ if(empresa) out.push({empresa,itens:[...itens],total}); };
+function parseCancelTexto(text){
+  const linhas=text.split(/\r?\n/), out=[]; let empresa=null,itens=[],total=0; const push=()=>{if(empresa) out.push({empresa,itens:[...itens],total});};
   for(const raw of linhas){
     const l=raw.trim();
     const cab=l.match(/^\*\s*([^*\-–]+?)\s*[\-–]\s*R\$\s*([0-9\._.,]+)/);
-    if(cab){ push(); empresa=cab[1].trim(); itens=[]; total=num(cab[2]); continue; }
+    if(cab){push();empresa=cab[1].trim();itens=[];total=num(cab[2]);continue;}
     const it=l.match(/^(?:[\p{Emoji}\p{So}\p{Sk}\p{Sc}\p{P}]{1,3})?\s*([^\-–]+?)\s*[\-–]\s*R\$\s*([0-9\._.,]+)/u);
-    if(it && empresa){ itens.push({nome:it[1].trim(), valor:num(it[2])}); }
-  }
-  push(); return out;
+    if(it && empresa){itens.push({nome:it[1].trim(),valor:num(it[2])});}
+  } push(); return out;
 }
 function aggregateSatisfacao(arr){
-  const map={}; const bucket=w=>{const s=String(w||'').toLowerCase();
-    if(s.startsWith('ótim')||s.startsWith('otim'))return 'Excelente';
-    if(s.startsWith('bom'))return 'Bom';
-    if(s.startsWith('regular'))return 'Regular';
-    if(s.startsWith('ruim'))return 'Ruim';
-    return null;};
+  const map={},bucket=w=>{const s=String(w||'').toLowerCase(); if(s.startsWith('ótim')||s.startsWith('otim'))return 'Excelente'; if(s.startsWith('bom'))return 'Bom'; if(s.startsWith('regular'))return 'Regular'; if(s.startsWith('ruim'))return 'Ruim'; return null;};
   const fields=['ambiente','atendimento','comida','musica','climatizacao','bebidas','iluminacao'];
-  arr.forEach(r=>{ const k=norm(r.empresa||r.Empresa||'');
-    if(!map[k]) map[k]={Excelente:0,Bom:0,Regular:0,Ruim:0};
-    fields.forEach(f=>{ const b=bucket(r[f]); if(b) map[k][b]++; });
-  });
+  arr.forEach(r=>{const k=norm(r.empresa||r.Empresa||''); if(!map[k]) map[k]={Excelente:0,Bom:0,Regular:0,Ruim:0}; fields.forEach(f=>{const b=bucket(r[f]); if(b) map[k][b]++;});});
   return map;
 }
 
-/* --------------------- RENDER --------------------- */
+// ---------- RUN ----------
 document.getElementById('btn').addEventListener('click', run);
+window.addEventListener('DOMContentLoaded', () => {
+  const params=new URLSearchParams(location.search);
+  const emp=params.get('empresa');
+  if(emp) document.getElementById('empresa').value = decodeURIComponent(emp);
+  run();
+});
 
 async function run(){
-  const empSel = document.getElementById('empresa').value;
-  const periodo = document.getElementById('periodo').value;
-  const qs = periodo ? `?periodo=${encodeURIComponent(periodo)}` : '';
+  const empSel=document.getElementById('empresa').value;
+  const periodo=document.getElementById('periodo').value;
+  const qs=periodo?`?periodo=${encodeURIComponent(periodo)}`:'';
 
-  // Carrega fontes (1x)
-  const [metasTxt, cancelTxt, satJson] = await Promise.all([
-    fetch(URL_METAS + qs).then(r=>r.text()).catch(()=>''),       // TEXT
-    fetch(URL_CANCEL + qs).then(r=>r.text()).catch(()=>''),      // TEXT
-    fetch(URL_SAT + qs).then(r=>r.json()).catch(()=>[])          // JSON
+  const [metasTxt,cancelTxt,satJson]=await Promise.all([
+    fetch(URL_METAS+qs).then(r=>r.text()).catch(()=>''), 
+    fetch(URL_CANCEL+qs).then(r=>r.text()).catch(()=>''), 
+    fetch(URL_SAT+qs).then(r=>r.json()).catch(()=>[])
   ]);
-  const metas  = parseMetasTexto(metasTxt);
-  const cancel = parseCancelamentosTexto(cancelTxt);
-  const satAgg = aggregateSatisfacao(satJson);
+  const metas=parseMetasTexto(metasTxt);
+  const cancel=parseCancelTexto(cancelTxt);
+  const satAgg=aggregateSatisfacao(satJson);
 
-  const empresas = empSel === 'TODAS AS EMPRESAS' ? EMPRESAS : [empSel];
-  const container = document.getElementById('content');
-  container.innerHTML = '';
+  const empresas = empSel==='TODAS AS EMPRESAS' ? EMPRESAS : [empSel];
+  const container=document.getElementById('content'); container.innerHTML='';
 
-  // Render por empresa
   for(const emp of empresas){
-    const empNorm = norm(emp);
-    const travasNome = MAP_TRAVAS[emp] || emp;
-    const travasKey  = norm(travasNome);
-
-    // Busca TRAVAS por empresa (para evitar latência acumulada, poderia paralelizar; aqui mantemos simples/estável)
-    let travasArr = await fetch(URL_TRAVAS + (qs + (qs?'&':'?') + 'empresa=' + encodeURIComponent(travasNome)))
-                        .then(r=>r.json()).catch(()=>[]);
-    if(!Array.isArray(travasArr) || travasArr.length===0){
-      travasArr = await fetch(URL_TRAVAS + (qs + (qs?'&':'?') + 'empresa=' + encodeURIComponent(emp)))
-                        .then(r=>r.json()).catch(()=>[]);
+    const empNorm=norm(emp); const travasNome=MAP_TRAVAS[emp]||emp; const travasKey=norm(travasNome);
+    // TRAVAS por empresa
+    let travas=await fetch(URL_TRAVAS+(qs+(qs?'&':'?')+'empresa='+encodeURIComponent(travasNome))).then(r=>r.json()).catch(()=>[]);
+    if(!Array.isArray(travas) || travas.length===0){
+      travas=await fetch(URL_TRAVAS+(qs+(qs?'&':'?')+'empresa='+encodeURIComponent(emp))).then(r=>r.json()).catch(()=>[]);
     }
-    let trav = null;
-    if(Array.isArray(travasArr)){
-      trav = travasArr.find(x=> norm(x.empresa)===travasKey)
-         ||  travasArr.find(x=> norm(x.empresa)===empNorm)
-         ||  travasArr[0] || null;
-    }
+    let trav = Array.isArray(travas) ? (travas.find(x=>norm(x.empresa)===travasKey) || travas.find(x=>norm(x.empresa)===empNorm) || travas[0]) : null;
 
-    const m = metas.find(x=> norm(x.empresa)===empNorm) || {meta:0,realizado:0};
-    const c = cancel.find(x=> norm(x.empresa)===empNorm) || {itens:[], total:0};
+    const m=metas.find(x=>norm(x.empresa)===empNorm) || {meta:0,realizado:0};
+    const c=cancel.find(x=>norm(x.empresa)===empNorm) || {itens:[],total:0};
 
-    // Regras da planilha (fonte 9)
-    const { totalGeral9, fornecedores9, forSubs9 } = somasPorFonte9(trav||{});
-    const travaCompras   = trav? Number(trav.travaCompras||0) : 0;
-    const travaTotalCalc = totalGeral9;
-    const fornecAbs      = fornecedores9;
-    const sobra          = travaCompras - fornecAbs;
-    const consumoPct     = travaCompras>0 ? (fornecAbs/travaCompras*100) : 0;
+    const {totalGeral9, fornecedores9, forSubs9} = somasPorFonte9(trav||{});
+    const travaCompras=trav?Number(trav.travaCompras||0):0;
+    const travaTotalCalc=totalGeral9;
+    const fornecAbs=fornecedores9;
+    const sobra=travaCompras - fornecAbs;
+    const consumoPct=travaCompras>0 ? (fornecAbs/travaCompras*100):0;
 
-    // monta seção da empresa
-    const sec = document.createElement('section'); sec.className='company';
-    sec.innerHTML = `
+    const sec=document.createElement('section'); sec.className='company';
+    sec.innerHTML=`
       <div class="title">${emp}</div>
       <div class="kpis">
         <div class="kpi"><div class="label">Meta de Compras</div><div class="value">${moeda(m.meta)}</div><div class="hint">—</div></div>
@@ -217,63 +179,24 @@ async function run(){
         <div class="kpi"><div class="label">Fornecedores (Total)</div><div class="value">${trav?moeda(fornecAbs):'—'}</div><div class="hint">${trav?(sobra>=0?'Sobra: ':'Estouro: ')+moeda(Math.abs(sobra)):'—'}</div></div>
       </div>
       <div class="grid">
-        <div class="card">
-          <div class="title">Metas x Realizado</div>
-          <canvas id="${idOf('metas')}"></canvas>
-          <div class="hint" style="margin-top:8px">${(m.meta>0?(m.realizado/m.meta*100):0)>100? pill('🚨 Estouro','bad'): pill('✅ Dentro do limite','ok')}</div>
-        </div>
-        <div class="card">
-          <div class="title">Cancelamentos (Top itens)</div>
-          <canvas id="${idOf('canc')}"></canvas>
-          <ul id="${idOf('lc')}"></ul>
-        </div>
-        <div class="card">
-          <div class="title">Trava de Compras • Top Subcategorias (Fornecedores)</div>
-          <canvas id="${idOf('forcats')}"></canvas>
-          <ul id="${idOf('lf')}"></ul>
-        </div>
-        <div class="card">
-          <div class="title">Satisfação dos Clientes</div>
-          <canvas id="${idOf('sat')}"></canvas>
-        </div>
-      </div>
-    `;
+        <div class="card"><div class="title">Metas x Realizado</div><canvas id="${idOf('m')}"></canvas><div class="hint" style="margin-top:8px">${(m.meta>0?(m.realizado/m.meta*100):0)>100?pill('🚨 Estouro','bad'):pill('✅ Dentro do limite','ok')}</div></div>
+        <div class="card"><div class="title">Cancelamentos (Top itens)</div><canvas id="${idOf('c')}"></canvas><ul id="${idOf('lc')}"></ul></div>
+        <div class="card"><div class="title">Trava de Compras • Top Subcategorias (Fornecedores)</div><canvas id="${idOf('f')}"></canvas><ul id="${idOf('lf')}"></ul></div>
+        <div class="card"><div class="title">Satisfação dos Clientes</div><canvas id="${idOf('s')}"></canvas></div>
+      </div>`;
     container.appendChild(sec);
 
-    // pega ids reais criados
-    const canvases = sec.querySelectorAll('canvas');
-    const [ctxMetas, ctxCanc, ctxForCats, ctxSat] = [...canvases].map(c=>c.getContext('2d'));
-    // metas
-    new Chart(ctxMetas, { type:'bar',
-      data:{ labels:['Meta','Realizado'], datasets:[{ data:[m.meta||0, m.realizado||0] }] },
-      options:{ responsive:true, plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:true } } }
-    });
-    // cancelamentos
-    const topCancel = [...(c.itens||[])].sort((a,b)=>b.valor-a.valor).slice(0,10);
-    new Chart(ctxCanc, { type:'bar',
-      data:{ labels: topCancel.map(i=>i.nome), datasets:[{ data: topCancel.map(i=>i.valor) }] },
-      options:{ responsive:true, plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:true } }, indexAxis:'x' }
-    });
-    const listCanc = sec.querySelector('ul[id^="lc-"]'); listCanc.innerHTML='';
-    topCancel.slice(0,5).forEach(i=>{ const li=document.createElement('li'); li.textContent = `${i.nome} — ${moeda(i.valor)}`; listCanc.appendChild(li); });
-
-    // fornecedores top subcategorias (fonte 9)
-    const topSubs = [...(forSubs9||[])].sort((a,b)=>Math.abs(b.valor)-Math.abs(a.valor)).slice(0,10);
-    new Chart(ctxForCats, { type:'bar',
-      data:{ labels: topSubs.map(s=>s.nome), datasets:[{ data: topSubs.map(s=>Math.abs(s.valor||0)) }] },
-      options:{ responsive:true, plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:true } } }
-    });
-    const listFor = sec.querySelector('ul[id^="lf-"]'); listFor.innerHTML='';
-    topSubs.forEach(s=>{ const li=document.createElement('li'); li.textContent = `${s.nome} — ${moeda(s.valor)}${s.pctDaTrava?' • '+s.pctDaTrava.toFixed(1)+'%':''}`; listFor.appendChild(li); });
-
-    // satisfação
-    const sat = satAgg[empNorm] || {Excelente:0,Bom:0,Regular:0,Ruim:0};
-    new Chart(ctxSat, { type:'pie',
-      data:{ labels:['Excelente','Bom','Regular','Ruim'],
-        datasets:[{ data:[sat.Excelente,sat.Bom,sat.Regular,sat.Ruim],
-          backgroundColor:['#22c55e','#0ea5e9','#f59e0b','#ef4444'] }]},
-      options:{ responsive:true, plugins:{ legend:{ position:'bottom' } } }
-    });
+    const cvs=sec.querySelectorAll('canvas');
+    const [ctxM,ctxC,ctxF,ctxS]=[...cvs].map(x=>x.getContext('2d'));
+    new Chart(ctxM,{type:'bar',data:{labels:['Meta','Realizado'],datasets:[{data:[m.meta||0,m.realizado||0]}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    const topC=[...(c.itens||[])].sort((a,b)=>b.valor-a.valor).slice(0,10);
+    new Chart(ctxC,{type:'bar',data:{labels:topC.map(i=>i.nome),datasets:[{data:topC.map(i=>i.valor)}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    const ulC=sec.querySelector('ul[id^="lc-"]'); ulC.innerHTML=''; topC.slice(0,5).forEach(i=>{const li=document.createElement('li');li.textContent=`${i.nome} — ${moeda(i.valor)}`;ulC.appendChild(li);});
+    const topF=[...(forSubs9||[])].sort((a,b)=>Math.abs(b.valor)-Math.abs(a.valor)).slice(0,10);
+    new Chart(ctxF,{type:'bar',data:{labels:topF.map(s=>s.nome),datasets:[{data:topF.map(s=>Math.abs(s.valor||0))}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    const ulF=sec.querySelector('ul[id^="lf-"]'); ulF.innerHTML=''; topF.forEach(s=>{const li=document.createElement('li'); li.textContent=`${s.nome} — ${moeda(s.valor)}${s.pctDaTrava?' • '+s.pctDaTrava.toFixed(1)+'%':''}`; ulF.appendChild(li);});
+    const sat=satAgg[empNorm]||{Excelente:0,Bom:0,Regular:0,Ruim:0};
+    new Chart(ctxS,{type:'pie',data:{labels:['Excelente','Bom','Regular','Ruim'],datasets:[{data:[sat.Excelente,sat.Bom,sat.Regular,sat.Ruim],backgroundColor:['#22c55e','#0ea5e9','#f59e0b','#ef4444']}]} ,options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
   }
 }
 </script>
