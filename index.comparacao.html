@@ -198,32 +198,41 @@ const ulSemMov=document.getElementById('listaSemMov');
 
 let bar=null, lineModal=null;
 
-/* ===== linhas (com excedeu negativo) ===== */
+/* ===== linhas (ordenar pelo valor ultrapassado em R$) ===== */
 function buildRows(mapCurr, mapPrev, mesAtual, mesAnt){
-  const nomes=new Set([...Object.keys(mapCurr),...Object.keys(mapPrev)]);
-  const rows=[];
+  const nomes = new Set([...Object.keys(mapCurr), ...Object.keys(mapPrev)]);
+  const rows = [];
+
   nomes.forEach(nome=>{
-    const atual   = mapCurr[nome] || 0;
-    const antes   = mapPrev[nome] || 0;
-    const pct     = antes>0 ? (atual/antes*100) : (atual>0 ? 100 : 0);
-    const falta   = Math.max(antes - atual, 0);
-    const excedeu = (atual>antes) ? -(atual-antes) : 0;   // NEGATIVO quando passou
+    const atual = mapCurr[nome] || 0;
+    const antes = mapPrev[nome] || 0;
 
-    let tag='ok', priority=2;
-    if(pct>=90){ tag='red'; priority=0; }
-    else if(pct>=85){ tag='orange'; priority=1; }
+    const pct   = antes>0 ? (atual/antes*100) : (atual>0 ? 100 : 0);
+    const falta = Math.max(antes - atual, 0);
 
-    rows.push({ nome, antes, atual, pct, falta, excedeu, mesAnt, mesAtual, tag, priority });
+    // chave para ordenação: quanto passou em R$ (positivo quando passou)
+    const ultrapassado = Math.max(atual - antes, 0);
+
+    // para exibir na tabela como valor negativo (quanto passou)
+    const excedeu = -ultrapassado;
+
+    let tag = 'ok';
+    if (pct >= 90) tag = 'red';
+    else if (pct >= 85) tag = 'orange';
+
+    rows.push({ nome, antes, atual, pct, falta, excedeu, ultrapassado, mesAnt, mesAtual, tag });
   });
 
+  // ORDEM: mais ultrapassado primeiro; empates: maior %; depois maior valor atual
   rows.sort((a,b)=>{
-    if (a.priority !== b.priority) return a.priority - b.priority;
+    if (b.ultrapassado !== a.ultrapassado) return b.ultrapassado - a.ultrapassado;
     if (b.pct !== a.pct) return b.pct - a.pct;
     return b.atual - a.atual;
   });
 
   return rows;
 }
+
 
 /* ===== tabela ===== */
 function renderTable(rows){
